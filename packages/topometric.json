@@ -1,0 +1,9 @@
+{
+  "enable": true,
+  "env": [
+    { "TOPOMETRIC_ROOT": "D:/Houdini/Topometric" },
+    { "HOUDINI_PATH": "$HOUDINI_PATH;$TOPOMETRIC_ROOT;&" },
+    { "HOUDINI_OTLSCAN_PATH": "$TOPOMETRIC_ROOT/otls;$HOUDINI_OTLSCAN_PATH" },
+    { "PYTHONPATH": "$TOPOMETRIC_ROOT/python;$PYTHONPATH" }
+  ]
+}

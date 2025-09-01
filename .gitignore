@@ -1,0 +1,51 @@
+## Houdini
+*.hip~
+*.hiplc~
+*.hipnc~
+*.autosave
+*.lock
+crash.*
+backup/
+temp/
+__old/
+_backup/
+
+## HDAs and caches
+*.hdalc~
+*.hdanc~
+*.old
+*.bak
+*.bgeo
+*.bgeo.sc
+*.vdb
+
+## Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.env.local
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## IDE
+.idea/
+.vscode/
+*.code-workspace
+
+## Logs
+*.log
+
+## Build/docs
+dist/
+build/
+site/
+.pytest_cache/
+coverage/
+
