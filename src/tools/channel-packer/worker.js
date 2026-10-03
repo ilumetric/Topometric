@@ -9,52 +9,11 @@
 //   { type: 'pixels', seq, job }          pack (if needed) and reply with the full RGBA bytes
 // A job is { W, H, alpha, chans: [4 × ({ id, ch, inv } | { value })] }.
 import { encodePNG, encodeTGA } from '../../core/codecs.js';
+import { resampleChannel } from '../../core/resample.js';
 
 const PREVIEW_MAX = 512;
 const inputs = new Map();   // id -> { w, h, data, planes: Map("WxH:c" -> Uint8ClampedArray) }
 let last = null;            // last packed result: { key, W, H, alpha, data }
-
-/* ── Resampling, one channel at a time ── */
-// Weights for one axis. Downscaling averages the covered area of source pixels exactly;
-// upscaling is linear between pixel centers. Stored flat: entries start[d]..start[d+1] belong to pixel d.
-function axis(sn, dn) {
-  const start = new Int32Array(dn + 1), src = [], wt = [];
-  for (let d = 0; d < dn; d++) {
-    if (dn < sn) {
-      const a = d * sn / dn, b = (d + 1) * sn / dn;
-      for (let i = Math.floor(a); i < Math.ceil(b); i++) { src.push(i); wt.push((Math.min(b, i + 1) - Math.max(a, i)) * dn / sn); }
-    } else {
-      const f = Math.min(sn - 1, Math.max(0, (d + .5) * sn / dn - .5)), i0 = Math.floor(f), t = f - i0;
-      src.push(i0); wt.push(1 - t);
-      if (t > 0) { src.push(i0 + 1); wt.push(t); }
-    }
-    start[d + 1] = src.length;
-  }
-  return { start, src: Int32Array.from(src), wt: Float64Array.from(wt) };
-}
-
-function resampleChannel(src, sw, sh, c, dw, dh) {
-  const X = axis(sw, dw), Y = axis(sh, dh);
-  const tmp = new Float32Array(dw * sh);                 // horizontal pass
-  for (let y = 0; y < sh; y++) {
-    const row = y * sw, o = y * dw;
-    for (let x = 0; x < dw; x++) {
-      let s = 0;
-      for (let k = X.start[x], e = X.start[x + 1]; k < e; k++) s += src[(row + X.src[k]) * 4 + c] * X.wt[k];
-      tmp[o + x] = s;
-    }
-  }
-  const dst = new Uint8ClampedArray(dw * dh), acc = new Float64Array(dw);
-  for (let y = 0; y < dh; y++) {                         // vertical pass
-    acc.fill(0);
-    for (let k = Y.start[y], e = Y.start[y + 1]; k < e; k++) {
-      const r = Y.src[k] * dw, w = Y.wt[k];
-      for (let x = 0; x < dw; x++) acc[x] += tmp[r + x] * w;
-    }
-    dst.set(acc, y * dw);                                // rounds and clamps to 0..255
-  }
-  return dst;
-}
 
 // Channel c of an input at W×H. Cached for the current output size only.
 function plane(inp, c, W, H) {

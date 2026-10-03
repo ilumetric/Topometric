@@ -879,3 +879,326 @@ select {
   width: 32px;
   height: 32px
 }
+
+/* ── Viewer tools (Kuwahator, Tile Maker): a zoomable image view with a settings panel ── */
+.vw-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start
+}
+
+.vw-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: var(--surface)
+}
+
+.vw-stage {
+  position: sticky;
+  top: 20px
+}
+
+.vw-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px
+}
+
+/* ── Viewer bar ── */
+.vw-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center
+}
+
+.vw-open {
+  height: 34px;
+  font-size: 13px
+}
+
+.vw-open .icon {
+  width: 16px;
+  height: 16px
+}
+
+.vw-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px
+}
+
+.vw-group button,
+.vw-toggle {
+  height: 26px;
+  min-width: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px var(--mono);
+  cursor: pointer
+}
+
+.vw-group button:hover:not(:disabled),
+.vw-toggle:hover {
+  color: var(--text)
+}
+
+.vw-group button[aria-pressed="true"],
+.vw-toggle[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--text)
+}
+
+.vw-group button:disabled {
+  opacity: .35;
+  cursor: default
+}
+
+.vw-group output {
+  min-width: 52px;
+  padding: 0 8px 0 4px;
+  color: var(--text-dim);
+  font: 12px var(--mono);
+  text-align: right
+}
+
+.vw-toggle {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-strong)
+}
+
+.vw-toggle[aria-pressed="true"] {
+  border-color: transparent
+}
+
+.vw-chips {
+  margin-left: auto
+}
+
+/* ── View ── */
+.vw-view {
+  position: relative;
+  height: max(360px, calc(100vh - 250px));
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0e0e0e;
+  touch-action: none;
+  user-select: none
+}
+
+.vw-view canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab
+}
+
+.vw-view canvas.is-panning {
+  cursor: grabbing
+}
+
+.vw-view.is-dragover {
+  outline: 2px dashed var(--text-dim);
+  outline-offset: -6px
+}
+
+.vw-msg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center
+}
+
+/* Filtering progress: a thin line along the top edge */
+.vw-progress {
+  --p: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--text-dim);
+  opacity: 0;
+  transform: scaleX(var(--p));
+  transform-origin: left;
+  transition: opacity .3s;
+  pointer-events: none
+}
+
+.vw-progress.is-on {
+  opacity: .8;
+  transition-delay: .15s
+}
+
+/* Before / after divider */
+.vw-split {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid rgba(255, 255, 255, .7);
+  pointer-events: none
+}
+
+.vw-split[hidden] {
+  display: none
+}
+
+.vw-split-label {
+  position: absolute;
+  top: 10px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .6);
+  color: #fff;
+  font: 600 11px var(--mono);
+  white-space: nowrap
+}
+
+.vw-split-label.is-before {
+  right: 10px
+}
+
+.vw-split-label.is-after {
+  left: 10px
+}
+
+.vw-split-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .55) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m9 6-6 6 6 6M15 6l6 6-6 6'/%3E%3C/svg%3E") no-repeat center;
+  cursor: ew-resize;
+  pointer-events: auto;
+  touch-action: none
+}
+
+.vw-hint,
+.vw-tip {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5
+}
+
+.vw-hint {
+  text-align: center
+}
+
+/* ── Panel ── */
+.vw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600
+}
+
+.vw-reset {
+  height: 28px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 12px
+}
+
+.vw-save {
+  display: flex;
+  gap: 8px
+}
+
+.vw-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: var(--field);
+  font: 13px var(--mono)
+}
+
+.vw-name input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: inherit
+}
+
+.vw-name span {
+  color: var(--muted)
+}
+
+.vw-name:focus-within {
+  border-color: var(--ring)
+}
+
+.vw-format {
+  display: block;
+  flex: none;
+  min-height: 0
+}
+
+.vw-format .seg button {
+  font-family: var(--mono)
+}
+
+.vw-dl .icon {
+  width: 16px;
+  height: 16px
+}
+
+@media (max-width: 1000px) {
+  .vw-layout {
+    grid-template-columns: minmax(0, 1fr)
+  }
+
+  .vw-stage {
+    position: static
+  }
+
+  .vw-view {
+    height: min(70vh, 640px)
+  }
+}
+
+@media (max-width: 480px) {
+  .vw-card {
+    padding: 12px
+  }
+
+  .vw-card .ctl {
+    grid-template-columns: 84px minmax(0, 1fr) auto
+  }
+
+  .vw-card .ctl-seg {
+    grid-template-columns: 84px minmax(0, 1fr)
+  }
+
+  .vw-chips {
+    margin-left: 0
+  }
+}

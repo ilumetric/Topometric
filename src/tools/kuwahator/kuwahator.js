@@ -9,7 +9,7 @@ import { decodeImage, IMAGE_ACCEPT, isImageFile } from '../../core/image.js';
 import { slider, segmented, toggle } from '../../core/controls.js';
 import { receive } from '../../core/handoff.js';
 import { createKuwahara } from './kuwahara.js';
-import { createViewer } from './viewer.js';
+import { createViewer } from '../../core/image-viewer.js';
 
 const STORE_KEY = 'topometric-kuwahator-v1';
 const SAMPLE_SIZE = 1024;
@@ -24,17 +24,18 @@ const TEMPLATE = `
     </div>
   </header>
   <div class="page-body">
-    <div class="container kw-layout">
-      <div class="kw-card kw-stage">
-        <div class="kw-bar">
-          <button type="button" class="btn kw-open" data-ref="open"><span>Open image</span></button>
-          <div class="kw-group" role="group" aria-label="Zoom">
+    <div class="container vw-layout">
+      <div class="vw-card vw-stage">
+        <div class="vw-bar">
+          <button type="button" class="btn vw-open" data-ref="open"><span>Open image</span></button>
+          <div class="vw-group" role="group" aria-label="Zoom">
             <button type="button" data-ref="fit" title="Fit to view (F)">Fit</button>
             <button type="button" data-ref="one" title="Actual pixels (1)">1:1</button>
             <output data-ref="zoom" aria-live="off">100%</output>
           </div>
-          <button type="button" class="kw-toggle" data-ref="compare" aria-pressed="false" title="Before / after split (C)">Compare</button>
-          <div class="kw-group kw-chips" data-ref="chips" role="group" aria-label="Channels">
+          <button type="button" class="vw-toggle" data-ref="tiled" aria-pressed="false" title="Repeat the image in every direction (T)">Tiled</button>
+          <button type="button" class="vw-toggle" data-ref="compare" aria-pressed="false" title="Before / after split (C)">Compare</button>
+          <div class="vw-group vw-chips" data-ref="chips" role="group" aria-label="Channels">
             <button type="button" data-chan="-1" aria-pressed="true" title="Color">RGB</button>
             <button type="button" data-chan="0" title="Red as grayscale">R</button>
             <button type="button" data-chan="1" title="Green as grayscale">G</button>
@@ -42,21 +43,21 @@ const TEMPLATE = `
             <button type="button" data-chan="3" title="Alpha as grayscale">A</button>
           </div>
         </div>
-        <div class="kw-view" data-ref="view">
+        <div class="vw-view" data-ref="view">
           <canvas data-ref="canvas"></canvas>
-          <div class="kw-split" data-ref="split" hidden>
-            <span class="kw-split-label is-before">Before</span>
-            <span class="kw-split-label is-after">After</span>
-            <button type="button" class="kw-split-knob" data-ref="knob" aria-label="Move the before/after divider"></button>
+          <div class="vw-split" data-ref="split" hidden>
+            <span class="vw-split-label is-before">Before</span>
+            <span class="vw-split-label is-after">After</span>
+            <button type="button" class="vw-split-knob" data-ref="knob" aria-label="Move the before/after divider"></button>
           </div>
-          <div class="kw-progress" data-ref="progress"></div>
-          <p class="kw-msg" data-ref="msg" hidden></p>
+          <div class="vw-progress" data-ref="progress"></div>
+          <p class="vw-msg" data-ref="msg" hidden></p>
         </div>
-        <p class="kw-hint">Scroll to zoom, drag to pan, double-click for 1:1. Drop an image anywhere on the view.</p>
+        <p class="vw-hint">Scroll to zoom, drag to pan, double-click for 1:1. Drop an image anywhere on the view.</p>
       </div>
-      <div class="kw-panel">
-        <div class="kw-card" data-ref="settings"></div>
-        <div class="kw-card" data-ref="export"></div>
+      <div class="vw-panel">
+        <div class="vw-card" data-ref="settings"></div>
+        <div class="vw-card" data-ref="export"></div>
       </div>
     </div>
   </div>`;
@@ -80,6 +81,7 @@ export function mount(root, { showToast }) {
   const out = { mode: 'color', format: 'tga', ...saved.out };
   let image = { name: 'Sample', w: SAMPLE_SIZE, h: SAMPLE_SIZE, note: '', data: null };   // data: null = built-in sample
   let fileName = 'T_Sample_Kuwahara';
+  let seamless = false;                     // filter across the edges: keeps a tileable texture tileable
   let visible = false;
   let saveTimer = 0;
   function save() {
@@ -136,7 +138,7 @@ export function mount(root, { showToast }) {
   }
   function run() {
     if (!engine) return;
-    engine.start(out.mode === 'color' ? p : pc.map(q => q.on ? q : null), viewer.focus(), out.mode);
+    engine.start(out.mode === 'color' ? p : pc.map(q => q.on ? q : null), viewer.focus(), out.mode, seamless);
     requestDraw();
   }
 
@@ -161,6 +163,13 @@ export function mount(root, { showToast }) {
   }
   function placeSplit() { if (viewer && viewer.split >= 0) r.split.style.left = viewer.split * 100 + '%'; }
   r.compare.addEventListener('click', () => setCompare(viewer.split < 0));
+  function setTiled(on) {
+    if (!viewer) return;
+    viewer.tiled = on;
+    r.tiled.setAttribute('aria-pressed', on);
+    viewer.fit();
+  }
+  r.tiled.addEventListener('click', () => setTiled(!viewer.tiled));
   r.knob.addEventListener('pointerdown', e => {
     e.preventDefault();
     e.stopPropagation();
@@ -199,6 +208,7 @@ export function mount(root, { showToast }) {
     if (e.code === 'KeyF') viewer.fit();
     else if (e.code === 'Digit1' || e.code === 'Numpad1') viewer.zoomAt(1);
     else if (e.code === 'KeyC') setCompare(viewer.split < 0);
+    else if (e.code === 'KeyT') setTiled(!viewer.tiled);
     else return;
     e.preventDefault();
   });
@@ -208,9 +218,9 @@ export function mount(root, { showToast }) {
   const add = c => { ctls.push(c); return c.el; };
   const changed = () => { run(); save(); };
   const bind = key => ({ get: () => cur()[key], set: v => { cur()[key] = v; }, def: DEFAULTS[key], onInput: changed });
-  const head = el('div', 'kw-head');
+  const head = el('div', 'vw-head');
   head.textContent = 'Filter';
-  const reset = el('button', 'btn btn-ghost kw-reset');
+  const reset = el('button', 'btn btn-ghost vw-reset');
   reset.type = 'button';
   reset.textContent = 'Reset';
   reset.title = 'Reset the settings shown below';
@@ -246,7 +256,7 @@ export function mount(root, { showToast }) {
     set: v => { out.mode = v; setChannel(v === 'color' ? -1 : edit); },
     onInput: () => { syncSettings(); changed(); },
   });
-  const tip = el('p', 'kw-tip');
+  const tip = el('p', 'vw-tip');
 
   function syncSettings() {
     const per = out.mode === 'channels', alpha = engine ? !engine.opaque : false;
@@ -267,10 +277,15 @@ export function mount(root, { showToast }) {
       ? 'Each channel is filtered as a grayscale mask with its own settings. Turn a channel off to keep it as it is.'
       : 'Radius is in pixels of the image. Smoothness blends the strokes into each other, Sharpness keeps edges crisp, Anisotropy stretches strokes along the shapes. Double-click a label to reset it.';
   }
-  r.settings.append(head, modeCtl.el, chanRow, onCtl.el, sliders, tip);
+  const seamCtl = toggle({
+    label: 'Seamless', get: () => seamless, set: v => { seamless = v; },
+    onInput: () => { if (seamless && !viewer.tiled) setTiled(true); run(); },
+  });
+  seamCtl.el.title = 'Filter across the edges, so a tileable texture stays tileable';
+  r.settings.append(head, modeCtl.el, chanRow, onCtl.el, sliders, seamCtl.el, tip);
 
   /* ── Export ── */
-  const nameLabel = el('label', 'kw-name');
+  const nameLabel = el('label', 'vw-name');
   const nameInput = Object.assign(el('input'), { value: fileName, spellcheck: false });
   nameInput.setAttribute('aria-label', 'File name');
   nameInput.addEventListener('input', () => { fileName = nameInput.value; });
@@ -280,12 +295,12 @@ export function mount(root, { showToast }) {
     options: [['tga', 'TGA'], ['png', 'PNG']],
     get: () => out.format, set: v => { out.format = v; }, onInput: () => { syncInfo(); save(); },
   });
-  formatCtl.el.classList.add('kw-format');
-  const dl = el('button', 'btn btn-primary kw-dl');
+  formatCtl.el.classList.add('vw-format');
+  const dl = el('button', 'btn btn-primary vw-dl');
   dl.type = 'button';
   dl.append(icon('download'), document.createTextNode('Download'));
-  const info = el('p', 'kw-tip');
-  const saveRow = el('div', 'kw-save');
+  const info = el('p', 'vw-tip');
+  const saveRow = el('div', 'vw-save');
   saveRow.append(nameLabel, formatCtl.el);
   r.export.append(saveRow, dl, info);
 
@@ -360,6 +375,7 @@ export function mount(root, { showToast }) {
     initGL();
     viewer.setImage(SAMPLE_SIZE, SAMPLE_SIZE);
     if (out.mode === 'channels') setChannel(edit);
+    setCompare(true);                     // before/after split is on from the start
   } catch (err) {
     console.error(err);
     engine = null;
@@ -379,7 +395,10 @@ export function mount(root, { showToast }) {
         started = true;
         viewer.resize();
         // packed maps are masks: filter each channel on its own
-        out.mode = 'channels'; modeCtl.sync(); setChannel(edit);
+        if (sent.packed) { out.mode = 'channels'; modeCtl.sync(); setChannel(edit); syncSettings(); }
+        // a seamless texture from Tile Maker: keep it seamless and show it tiled
+        seamless = !!sent.tileable; seamCtl.sync();
+        if (seamless !== viewer.tiled) setTiled(seamless);
         setImage(sent, sent.base);
       } else if (!started && engine) { started = true; viewer.resize(); viewer.fit(); run(); }
       requestDraw();

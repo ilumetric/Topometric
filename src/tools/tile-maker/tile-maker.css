@@ -1,0 +1,106 @@
+/* Tile Maker — loaded together with the tool. */
+
+#page-tile-maker {
+  --content-w: 1320px
+}
+
+.vw-panel .ctl[hidden] {
+  display: none
+}
+
+.tm-size {
+  grid-template-columns: 40px minmax(0, 1fr)
+}
+
+.tm-size .seg button {
+  min-width: 0;
+  padding: 0 4px;
+  font: 500 11px var(--mono)
+}
+
+/* Work time is unknown up front: a light sweeps along the top edge */
+.vw-progress.tm-busy {
+  --p: 1;
+  background: linear-gradient(90deg, transparent, var(--text-dim), transparent) 0 0 / 40% 100% no-repeat;
+  animation: tm-sweep 1s linear infinite
+}
+
+@keyframes tm-sweep {
+  from {
+    background-position: -40% 0
+  }
+
+  to {
+    background-position: 140% 0
+  }
+}
+
+/* ── Clone brush ── */
+.vw-view.is-cloning canvas {
+  cursor: crosshair
+}
+
+.vw-view.is-cloning.is-pan-key canvas {
+  cursor: grab
+}
+
+.tm-brush,
+.tm-source {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%)
+}
+
+.tm-brush {
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .5)
+}
+
+/* where the brush copies from */
+.tm-source {
+  width: 18px;
+  height: 18px;
+  background:
+    linear-gradient(#fff, #fff) center / 2px 100% no-repeat,
+    linear-gradient(#fff, #fff) center / 100% 2px no-repeat;
+  filter: drop-shadow(0 0 1px #000)
+}
+
+.tm-brush[hidden],
+.tm-source[hidden],
+.tm-status[hidden] {
+  display: none
+}
+
+.tm-status {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .65);
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none
+}
+
+.tm-clone-row {
+  display: flex;
+  gap: 8px
+}
+
+.tm-clone-row .btn {
+  height: 32px;
+  font-size: 13px
+}
+
+.tm-send {
+  color: var(--muted);
+  font-size: 13px
+}
+
+.tm-send .icon {
+  width: 15px;
+  height: 15px
+}

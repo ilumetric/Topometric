@@ -33,7 +33,11 @@ const FS_TENSOR = HEAD + `
 uniform sampler2D uSrc;
 uniform ivec2 uOrigin, uSize;
 uniform vec4 uMask;
-vec4 px(ivec2 p) { return texelFetch(uSrc, clamp(p, ivec2(0), uSize - 1), 0); }
+uniform bool uWrap;
+vec4 px(ivec2 p) {
+  p = uWrap ? p - uSize * ivec2(floor(vec2(p) / vec2(uSize))) : clamp(p, ivec2(0), uSize - 1);
+  return texelFetch(uSrc, p, 0);
+}
 void main() {
   ivec2 p = ivec2(gl_FragCoord.xy) + uOrigin;
   vec4 a = px(p + ivec2(-1, -1)), b = px(p + ivec2(0, -1)), c = px(p + ivec2(1, -1));
@@ -67,7 +71,11 @@ uniform sampler2D uSrc, uT;
 uniform ivec2 uSize, uTOrigin;
 uniform float uRadius, uAlpha, uQ, uZeta, uEta;
 uniform vec4 uVarW;
-vec4 px(ivec2 p) { return texelFetch(uSrc, clamp(p, ivec2(0), uSize - 1), 0); }
+uniform bool uWrap;
+vec4 px(ivec2 p) {
+  p = uWrap ? p - uSize * ivec2(floor(vec2(p) / vec2(uSize))) : clamp(p, ivec2(0), uSize - 1);
+  return texelFetch(uSrc, p, 0);
+}
 void main() {
   ivec2 p = ivec2(gl_FragCoord.xy);
   vec3 t = texelFetch(uT, p - uTOrigin, 0).xyz;
@@ -291,8 +299,9 @@ export function createKuwahara(gl) {
 
   // Starts (or restarts) filtering the whole image; tiles nearest to `focus` go first.
   // `params` is one set for the color mode, or an array of 4 sets (null = channel off)
-  // for the per-channel mode.
-  function start(params, focus = [W / 2, H / 2], mode = 'color') {
+  // for the per-channel mode. `wrap` reads across the opposite edge, so a seamless
+  // texture stays seamless.
+  function start(params, focus = [W / 2, H / 2], mode = 'color', wrap = false) {
     if (!src) return;
     const pass = (ch, q) => {
       if (!q) return { ch, copy: true, cost: 1 };
@@ -301,7 +310,7 @@ export function createKuwahara(gl) {
     };
     const passes = mode === 'color' ? [pass(-1, params)]
       : (opaque ? [0, 1, 2] : [0, 1, 2, 3]).map(ch => pass(ch, params[ch]));
-    job = { passes, cost: passes.reduce((a, q) => a + q.cost, 0) };
+    job = { passes, wrap, cost: passes.reduce((a, q) => a + q.cost, 0) };
     queue = [];
     for (let y = 0; y < H; y += TILE) for (let x = 0; x < W; x += TILE) {
       const w = Math.min(TILE, W - x), h = Math.min(TILE, H - y);
@@ -333,6 +342,7 @@ export function createKuwahara(gl) {
       gl.uniform2i(progs.tensor.u.uOrigin, ox, oy);
       gl.uniform2i(progs.tensor.u.uSize, W, H);
       gl.uniform4fv(progs.tensor.u.uMask, mask);
+      gl.uniform1i(progs.tensor.u.uWrap, job.wrap);
       draw(progs.tensor, tensorA.fb, 0, 0, tw, th);
       gl.useProgram(progs.blur.p);
       gl.uniform1i(progs.blur.u.uT, 0);
@@ -359,6 +369,7 @@ export function createKuwahara(gl) {
       gl.uniform1f(k.u.uZeta, c.zeta);
       gl.uniform1f(k.u.uEta, c.eta);
       gl.uniform4fv(k.u.uVarW, varW);
+      gl.uniform1i(k.u.uWrap, job.wrap);
       if (ch >= 0) gl.colorMask(ch === 0, ch === 1, ch === 2, ch === 3);
       draw(k, dst.fb, x, y, w, h);
       gl.colorMask(true, true, true, true);

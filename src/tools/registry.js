@@ -31,4 +31,12 @@ export const TOOLS = [
     module: here('./kuwahator/kuwahator.js'),
     css: here('./kuwahator/kuwahator.css'),
   },
+  {
+    id: 'tile-maker',
+    title: 'Tile Maker',
+    short: 'Tile',
+    icon: 'tile',
+    module: here('./tile-maker/tile-maker.js'),
+    css: here('./tile-maker/tile-maker.css'),
+  },
 ];

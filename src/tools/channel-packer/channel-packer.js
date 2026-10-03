@@ -493,7 +493,7 @@ export function mount(root, { showToast }) {
     try {
       const { W, H, data } = await encode(current.job, 'pixels');
       const base = fileBase();
-      sendTo('kuwahator', { name: base + ' (Channel Packer)', base, w: W, h: H, data });
+      sendTo('kuwahator', { name: base + ' (Channel Packer)', base, w: W, h: H, data, packed: true });
     } catch (err) { showToast('Could not send the map: ' + err.message); }
     r.send.disabled = !current;
   });

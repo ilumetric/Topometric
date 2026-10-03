@@ -48,7 +48,21 @@ Turns a texture into painted strokes with an anisotropic Kuwahara filter, the sa
 - Radius, Smoothness, Sharpness and Anisotropy. Strokes follow the shapes of the image and edges stay crisp.
 - Color mode filters the image as a whole. Per channel mode treats each channel as its own grayscale mask with its own settings, and any channel can be left untouched — for packed maps.
 - A viewer made for checking detail: zoom to the cursor up to 6400 %, pan, fit or 1:1, a pixel grid when zoomed in, a before/after split and single-channel views. Keys: F fit, 1 actual pixels, C compare.
+- Seamless: filters across the edges, so a tileable texture stays tileable; Tiled shows it repeated.
 - Runs on the GPU in tiles, starting where you look, so 4K and 8K maps stay responsive.
+- Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG. Alpha is kept when the source has it.
+
+### Tile Maker
+
+Makes an ordinary texture or photo tile seamlessly — without the visible seams and the grid of bright and dark patches that give a repeat away.
+
+- Smart cut: the edges overlap, and they are joined along the path where both sides match best (image quilting's minimum error cut), so there's no ghosting and detail stays sharp. The top/bottom path closes around the tile, so the corners meet too. Crossfade is there for soft textures like clouds or fog.
+- Heal seams: the strip around each seam is painted again from similar spots of the texture (PatchMatch, like content-aware fill), so a cut through a stone or a leaf becomes a natural edge.
+- Equalize: evens out light and color that change across a photo (vignetting, light falloff) before the seams are made.
+- Clone brush: Alt+click picks a source, then paint over anything that still gives the repeat away. Strokes wrap around the tile edges and stay when you change the settings.
+- Tiled viewer: the result repeats in every direction, the fitted view puts the point where four tiles meet in the middle, Edges outlines the tiles, and Compare shows the source tiled as is next to the result.
+- Size: native (the source minus the overlap) or 512–8192 px; resizing wraps around the edges, so the tile stays seamless.
+- Open the result in Kuwahator with one click; it arrives with Seamless on, so it stays tileable.
 - Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG. Alpha is kept when the source has it.
 
 More tools are on the way.
