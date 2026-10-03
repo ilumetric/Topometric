@@ -323,6 +323,7 @@ export function mount(root, { showToast }) {
       add(colorField({ label: 'Color', ...bind('rimColor') })),
       add(slider({ label: 'Edge light', min: 0, max: 1, step: .01, ...bind('edgeLight') })),
       add(slider({ label: 'Edge shadow', min: 0, max: 1, step: .01, ...bind('edgeShadow') })),
+      add(colorField({ label: 'Shadow color', ...bind('edgeShadowColor') })),
     ]),
     section('Stylize', false, [
       add(toggle({ label: 'Toon', ...bind('toon') })),

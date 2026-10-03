@@ -9,7 +9,7 @@ export const DEFAULTS = {
   spec: .3, roughness: .35, specColor: '#ffffff',
   refl: 0, blur: .2, metal: 0, env: 'studio', envRot: 0,
   rim: 0, rimWidth: .5, rimColor: '#ffffff',
-  edgeLight: 0, edgeShadow: 0,
+  edgeLight: 0, edgeShadow: 0, edgeShadowColor: '#000000',
   toon: false, steps: 2, toonSoft: .1,
   outline: 0, outlineColor: '#111111',
   stripes: 0, stripeAngle: 0, stripeWidth: .5, stripeColor: '#111111',
@@ -23,17 +23,17 @@ export const PRESETS = [
     name: 'Clay', base: '#b5aca3', ambient: .3, ground: '#5a524c',
     lights: [L(-.45, .45, 1.1, .5)], spec: .12, roughness: .55, rim: .25, rimColor: '#2a2522', rimWidth: .35,
   },
-  // Recreations of the ORB Clay matcaps popular in ZBrush, fitted to the originals including the
-  // light edge band and the dark contour around the sphere (about 2/255 RMS inside the sphere).
+  // Recreations of the ORB Clay matcaps popular in ZBrush, fitted to the originals and tuned by eye
+  // in the sphere view, including the light edge band and the dark contour around the sphere.
   {
     name: 'ORB Clay', base: '#adada7', ambient: .38, sky: '#d4ceef', ground: '#6d613d',
-    lights: [L(.03, .17, .92, .41)], spec: .14, roughness: .64, rim: .27, rimColor: '#ccc9b8', rimWidth: .89,
-    edgeLight: .18, edgeShadow: .3,
+    lights: [L(.03, .13, .82, .28)], spec: .18, roughness: .64, rim: .21, rimColor: '#c8c2a1', rimWidth: .61,
+    edgeLight: .19, edgeShadow: .32,
   },
   {
     name: 'ORB Clay Gloss', base: '#b0aca8', ambient: .43, sky: '#e0efff', ground: '#4a4a2e',
-    lights: [L(.02, .11, .88, .27)], spec: .28, roughness: .61, rim: .25, rimColor: '#dfdbc8', rimWidth: .89,
-    edgeLight: .16, edgeShadow: .29,
+    lights: [L(.02, .11, .88, .27)], spec: .34, roughness: .61, refl: .22, blur: .2,
+    rim: .25, rimColor: '#dad1a5', rimWidth: .89, edgeLight: .16, edgeShadow: .32,
   },
   {
     name: 'Matte White', base: '#e4e4e4', ambient: .5, ground: '#8a8a8a',

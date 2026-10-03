@@ -20,7 +20,7 @@ out vec4 outColor;
 
 uniform float uPx;                 // size of one pixel in sphere units (2 / size)
 uniform int uMode;                 // 0 shaded, 1 normal
-uniform vec3 uBase, uSky, uGround, uScatterCol, uSpecCol, uRimCol, uOutlineCol, uStripeCol, uBg;
+uniform vec3 uBase, uSky, uGround, uScatterCol, uSpecCol, uRimCol, uOutlineCol, uStripeCol, uBg, uShadowCol;
 uniform float uAmbient, uScatter, uSpec, uExponent, uRefl, uBlur, uMetal, uEnvRot, uRim, uRimPow;
 uniform float uToon, uSteps, uToonSoft, uOutline, uStripes, uStripeAngle, uStripeWidth;
 uniform float uExposure, uContrast, uSaturation, uGrain, uEdgeLight, uEdgeShadow;
@@ -133,7 +133,7 @@ void main() {
   // Outside the disc shade() keeps the edge normal, so "extend" is a radial dilation of the edge colors.
   // Edge shadow: a dark contour hugging the sphere that fades into the extended background.
   float shadow = uEdgeShadow * exp(-max(length(vP) - 1., 0.) / .03);
-  outColor = uBgMode == 2 ? vec4(mix(c * (1. - shadow), c, a), 1.) : uBgMode == 1 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
+  outColor = uBgMode == 2 ? vec4(mix(mix(c, uShadowCol, shadow), c, a), 1.) : uBgMode == 1 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
 }`;
 
 /* ── Color ── */
@@ -165,7 +165,7 @@ export function createMatcapPainter(renderer) {
     uLightCol: { value: Array.from({ length: MAX_LIGHTS }, vec3) },
     uLightWrap: { value: new Array(MAX_LIGHTS).fill(0) },
   };
-  for (const k of ['uBase', 'uSky', 'uGround', 'uScatterCol', 'uSpecCol', 'uRimCol', 'uOutlineCol', 'uStripeCol', 'uBg']) uniforms[k] = { value: vec3() };
+  for (const k of ['uBase', 'uSky', 'uGround', 'uScatterCol', 'uSpecCol', 'uRimCol', 'uOutlineCol', 'uStripeCol', 'uBg', 'uShadowCol']) uniforms[k] = { value: vec3() };
   for (const k of ['uAmbient', 'uScatter', 'uSpec', 'uExponent', 'uRefl', 'uBlur', 'uMetal', 'uEnvRot', 'uRim', 'uRimPow',
     'uToon', 'uSteps', 'uToonSoft', 'uOutline', 'uStripes', 'uStripeAngle', 'uStripeWidth',
     'uExposure', 'uContrast', 'uSaturation', 'uGrain', 'uEdgeLight', 'uEdgeShadow', 'uLinearOut']) uniforms[k] = { value: 0 };
@@ -185,6 +185,7 @@ export function createMatcapPainter(renderer) {
     lin('uBase', s.base); lin('uSky', s.sky); lin('uGround', s.ground); lin('uScatterCol', s.scatterColor);
     lin('uSpecCol', s.specColor); lin('uRimCol', s.rimColor); lin('uOutlineCol', s.outlineColor); lin('uStripeCol', s.stripeColor);
     u.uBg.value.fromArray(hexToSRGB(s.bgColor));
+    u.uShadowCol.value.fromArray(hexToSRGB(s.edgeShadowColor || '#000000'));
     u.uBgMode.value = BG_MODES[s.bg] ?? 0;
     u.uAmbient.value = s.ambient; u.uScatter.value = s.scatter; u.uSpec.value = s.spec;
     const a = Math.max(.04, s.roughness) ** 2;               // Blinn-Phong exponent matching GGX roughness
