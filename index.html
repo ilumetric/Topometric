@@ -4,14 +4,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Everything runs in the browser: no network requests are allowed, so files never leave the machine. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <!-- Everything runs in the browser: requests can only reach this site's own files and local blob:/data: URLs,
+       so files never leave the machine. The script hash allows the import map below; update it when the map changes. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-OFXbwOhwNNSKS1rR+l9Mvbk6uMzaCkGoAusy6khZLQE='; img-src 'self' data: blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b0b0b">
   <meta name="description" content="Topometric — free local tools for game artists. Everything runs in your browser.">
   <title>Topometric</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="src/styles/base.css">
+  <!-- Shared libraries for tools: import * as THREE from 'three' -->
+  <script type="importmap">{"imports":{"three":"./src/vendor/three/three.module.js","three/addons/":"./src/vendor/three/addons/"}}</script>
   <script type="module" src="src/app.js"></script>
 </head>
 

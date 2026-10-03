@@ -3,3 +3,5 @@
 *.jpg binary
 *.tga binary
 *.ico binary
+*.glb binary
+*.bin binary

@@ -1,18 +1,18 @@
-// WebGL2 renderer for the MatCap Generator.
-// The matcap is computed per pixel in a fragment shader: a sphere seen from the front,
-// where each pixel's normal is lit in linear space and converted to sRGB at the end.
-// The same shader draws the on-screen sphere, the preset thumbnails and the exported file,
-// so the preview and the saved PNG match.
-import { MESHES } from './meshes.js';
+// Matcap shader on three.js. The sphere is computed per pixel in a fragment shader:
+// each pixel's normal is lit in linear space and converted to sRGB at the end, with
+// 4 samples per pixel and exact edge coverage. The same material draws the on-screen
+// sphere, the preset thumbnails, the texture for the model preview and the exported file,
+// so they always match.
+import * as THREE from 'three';
 
 const MAX_LIGHTS = 4;
 
-const QUAD_VS = `#version 300 es
-in vec2 aPos;
+const VERTEX = /* glsl */ `
+in vec3 position;
 out vec2 vP;
-void main() { vP = aPos; gl_Position = vec4(aPos, 0., 1.); }`;
+void main() { vP = position.xy; gl_Position = vec4(position.xy, 0., 1.); }`;
 
-const MATCAP_FS = `#version 300 es
+const FRAGMENT = /* glsl */ `
 precision highp float;
 in vec2 vP;
 out vec4 outColor;
@@ -23,7 +23,9 @@ uniform int uMode;                 // 0 shaded, 1 normal
 uniform vec3 uBase, uSky, uGround, uScatterCol, uSpecCol, uRimCol, uOutlineCol, uStripeCol, uBg;
 uniform float uAmbient, uScatter, uSpec, uExponent, uRefl, uBlur, uMetal, uEnvRot, uRim, uRimPow;
 uniform float uToon, uSteps, uToonSoft, uOutline, uStripes, uStripeAngle, uStripeWidth;
-uniform float uExposure, uContrast, uSaturation, uGrain, uOpaque;
+uniform float uExposure, uContrast, uSaturation, uGrain;
+uniform int uBgMode;               // 0 transparent, 1 solid color, 2 extend edge colors
+uniform float uLinearOut;          // 1 when drawing into an sRGB texture, which encodes on write
 uniform int uEnv, uLights;
 uniform vec3 uLightDir[${MAX_LIGHTS}], uLightCol[${MAX_LIGHTS}];
 uniform float uLightWrap[${MAX_LIGHTS}];
@@ -37,28 +39,30 @@ float toonStep(float d) {
 // Procedural environments for reflections; blur widens every edge.
 vec3 env(vec3 d) {
   float b = uBlur * .9 + .004;
+  vec3 col;
   if (uEnv == 0) {                 // studio: dark room, every light is a soft round softbox
-    vec3 col = mix(vec3(.015), vec3(.22), smoothstep(-.5 - b, .9 + b, d.y));
+    col = mix(vec3(.015), vec3(.22), smoothstep(-.5 - b, .9 + b, d.y));
     col += vec3(.12) * (1. - smoothstep(0., .18 + b, abs(d.y + .05)));   // soft horizon glow
     for (int i = 0; i < ${MAX_LIGHTS}; i++) {
       if (i >= uLights) break;
       float rad = .14 + .4 * uLightWrap[i];
       col += uLightCol[i] * 2.5 * smoothstep(cos(rad + b), cos(max(rad - b, 0.)), dot(d, uLightDir[i]));
     }
-    return col;
+  } else {
+    float c = cos(uEnvRot), s = sin(uEnvRot);
+    d = vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
+    if (uEnv == 1) {               // sky: blue sky, warm ground, sun
+      vec3 sky = mix(vec3(.72, .82, .95), vec3(.16, .32, .72), smoothstep(0., .9, d.y));
+      vec3 ground = mix(vec3(.10, .08, .06), vec3(.32, .26, .2), smoothstep(-.9, 0., d.y));
+      float sun = dot(d, normalize(vec3(.55, .55, .63)));
+      col = mix(ground, sky, smoothstep(-b * .5, b * .5, d.y)) + vec3(6., 5.4, 4.4) * smoothstep(.996 - b * .4, 1. - b * .2, sun);
+    } else {                       // horizon: classic chrome
+      vec3 top = mix(vec3(1.), vec3(.5), smoothstep(0., 1., d.y));
+      vec3 bottom = mix(vec3(.05), vec3(0.), smoothstep(0., -1., d.y));
+      col = mix(bottom, top, smoothstep(-b * .5, b * .5, d.y));
+    }
   }
-  float c = cos(uEnvRot), s = sin(uEnvRot);
-  d = vec3(c * d.x + s * d.z, d.y, -s * d.x + c * d.z);
-  if (uEnv == 1) {                 // sky: blue sky, warm ground, sun
-    vec3 sky = mix(vec3(.72, .82, .95), vec3(.16, .32, .72), smoothstep(0., .9, d.y));
-    vec3 ground = mix(vec3(.10, .08, .06), vec3(.32, .26, .2), smoothstep(-.9, 0., d.y));
-    vec3 col = mix(ground, sky, smoothstep(-b * .5, b * .5, d.y));
-    float sun = dot(d, normalize(vec3(.55, .55, .63)));
-    return col + vec3(6., 5.4, 4.4) * smoothstep(.996 - b * .4, 1. - b * .2, sun);
-  }
-  vec3 top = mix(vec3(1.), vec3(.5), smoothstep(0., 1., d.y));   // horizon: classic chrome
-  vec3 bottom = mix(vec3(.05), vec3(0.), smoothstep(0., -1., d.y));
-  return mix(bottom, top, smoothstep(-b * .5, b * .5, d.y));
+  return col;
 }
 
 vec3 shade(vec2 p) {
@@ -105,6 +109,10 @@ vec3 toSRGB(vec3 c) {
   return mix(c * 12.92, 1.055 * pow(c, vec3(1. / 2.4)) - .055, step(.0031308, c));
 }
 
+vec3 toLinear(vec3 c) {
+  return mix(c / 12.92, pow((c + .055) / 1.055, vec3(2.4)), step(.04045, c));
+}
+
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
 void main() {
@@ -119,26 +127,10 @@ void main() {
     c += (hash(gl_FragCoord.xy) - .5) * uGrain * .16;
   }
   c = clamp(c, 0., 1.);
+  if (uLinearOut > .5) c = toLinear(c);
   float a = clamp((1. - length(vP)) / uPx + .5, 0., 1.);   // exact edge coverage
-  outColor = uOpaque > .5 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
-}`;
-
-const MESH_VS = `#version 300 es
-in vec3 aPos;
-in vec3 aNor;
-uniform mat4 uMVP;
-uniform mat3 uNM;
-out vec3 vN;
-void main() { vN = uNM * aNor; gl_Position = uMVP * vec4(aPos, 1.); }`;
-
-const MESH_FS = `#version 300 es
-precision highp float;
-in vec3 vN;
-uniform sampler2D uTex;
-out vec4 outColor;
-void main() {
-  vec3 n = normalize(vN);
-  outColor = vec4(texture(uTex, n.xy * .5 + .5).rgb, 1.);
+  // Outside the disc shade() keeps the edge normal, so "extend" is a radial dilation of the edge colors.
+  outColor = uBgMode == 2 ? vec4(c, 1.) : uBgMode == 1 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
 }`;
 
 /* ── Color ── */
@@ -159,127 +151,84 @@ export function lightDir(x, y) {
   return [2 * nz * nx, 2 * nz * ny, 2 * nz * nz - 1];
 }
 
-/* ── Matrices (column-major) ── */
-function perspective(fovy, aspect, near, far) {
-  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
-  return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
-}
-function mul(a, b) {
-  const o = new Array(16).fill(0);
-  for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c * 4 + r] += a[k * 4 + r] * b[c * 4 + k];
-  return o;
-}
-function rotation(yaw, pitch) {
-  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  // Rx(pitch) * Ry(yaw)
-  return [cy, sp * sy, -cp * sy, 0, 0, cp, sp, 0, sy, -sp * cy, cp * cy, 0, 0, 0, 0, 1];
-}
+const BG_MODES = { transparent: 0, color: 1, extend: 2 };
 
-/* ── Renderer ── */
-export function createRenderer(canvas) {
-  const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: false, antialias: true });
-  if (!gl) return null;
+// Draws matcaps with a three.js WebGLRenderer (shared with the model viewer).
+export function createMatcapPainter(renderer) {
+  const vec3 = () => new THREE.Vector3();
+  const uniforms = {
+    uPx: { value: 1 }, uMode: { value: 0 }, uEnv: { value: 0 }, uLights: { value: 0 }, uBgMode: { value: 0 },
+    uLightDir: { value: Array.from({ length: MAX_LIGHTS }, vec3) },
+    uLightCol: { value: Array.from({ length: MAX_LIGHTS }, vec3) },
+    uLightWrap: { value: new Array(MAX_LIGHTS).fill(0) },
+  };
+  for (const k of ['uBase', 'uSky', 'uGround', 'uScatterCol', 'uSpecCol', 'uRimCol', 'uOutlineCol', 'uStripeCol', 'uBg']) uniforms[k] = { value: vec3() };
+  for (const k of ['uAmbient', 'uScatter', 'uSpec', 'uExponent', 'uRefl', 'uBlur', 'uMetal', 'uEnvRot', 'uRim', 'uRimPow',
+    'uToon', 'uSteps', 'uToonSoft', 'uOutline', 'uStripes', 'uStripeAngle', 'uStripeWidth',
+    'uExposure', 'uContrast', 'uSaturation', 'uGrain', 'uLinearOut']) uniforms[k] = { value: 0 };
 
-  function compile(vs, fs) {
-    const p = gl.createProgram();
-    for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
-      const s = gl.createShader(type);
-      gl.shaderSource(s, src);
-      gl.compileShader(s);
-      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-      gl.attachShader(p, s);
-    }
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    const loc = {};
-    const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-    for (let i = 0; i < n; i++) {
-      const name = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, '');
-      loc[name] = gl.getUniformLocation(p, name);
-    }
-    return { p, loc };
-  }
+  const material = new THREE.RawShaderMaterial({
+    glslVersion: THREE.GLSL3, vertexShader: VERTEX, fragmentShader: FRAGMENT, uniforms,
+    depthTest: false, depthWrite: false, transparent: false, blending: THREE.NoBlending,
+  });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+  quad.frustumCulled = false;
+  const scene = new THREE.Scene().add(quad);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-  const matcap = compile(QUAD_VS, MATCAP_FS);
-  const mesh = compile(MESH_VS, MESH_FS);
-
-  const quad = gl.createVertexArray();
-  gl.bindVertexArray(quad);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-  const qa = gl.getAttribLocation(matcap.p, 'aPos');
-  gl.enableVertexAttribArray(qa);
-  gl.vertexAttribPointer(qa, 2, gl.FLOAT, false, 0, 0);
-
-  // Uniform values from tool parameters.
-  function uniforms(s) {
-    const u = matcap.loc, f = (k, v) => u[k] && gl.uniform1f(u[k], v), v3 = (k, v) => u[k] && gl.uniform3fv(u[k], v);
-    gl.uniform1i(u.uMode, s.mode === 'normal' ? 1 : 0);
-    v3('uBase', hexToLinear(s.base)); v3('uSky', hexToLinear(s.sky)); v3('uGround', hexToLinear(s.ground));
-    v3('uScatterCol', hexToLinear(s.scatterColor)); v3('uSpecCol', hexToLinear(s.specColor));
-    v3('uRimCol', hexToLinear(s.rimColor)); v3('uOutlineCol', hexToLinear(s.outlineColor));
-    v3('uStripeCol', hexToLinear(s.stripeColor)); v3('uBg', hexToSRGB(s.bgColor));
-    f('uAmbient', s.ambient); f('uScatter', s.scatter); f('uSpec', s.spec);
+  function setParams(s) {
+    const u = uniforms, lin = (k, hex) => u[k].value.fromArray(hexToLinear(hex));
+    u.uMode.value = s.mode === 'normal' ? 1 : 0;
+    lin('uBase', s.base); lin('uSky', s.sky); lin('uGround', s.ground); lin('uScatterCol', s.scatterColor);
+    lin('uSpecCol', s.specColor); lin('uRimCol', s.rimColor); lin('uOutlineCol', s.outlineColor); lin('uStripeCol', s.stripeColor);
+    u.uBg.value.fromArray(hexToSRGB(s.bgColor));
+    u.uBgMode.value = BG_MODES[s.bg] ?? 0;
+    u.uAmbient.value = s.ambient; u.uScatter.value = s.scatter; u.uSpec.value = s.spec;
     const a = Math.max(.04, s.roughness) ** 2;               // Blinn-Phong exponent matching GGX roughness
-    f('uExponent', 2 / (a * a) - 2);
-    f('uRefl', s.refl); f('uBlur', s.blur); f('uMetal', s.metal); f('uEnvRot', s.envRot * Math.PI / 180);
-    gl.uniform1i(u.uEnv, { studio: 0, sky: 1, horizon: 2 }[s.env] ?? 0);
-    f('uRim', s.rim); f('uRimPow', 8 - s.rimWidth * 7.2);
-    f('uToon', s.toon ? 1 : 0); f('uSteps', s.steps); f('uToonSoft', s.toonSoft);
-    f('uOutline', s.outline); f('uStripes', s.stripes); f('uStripeAngle', s.stripeAngle * Math.PI / 180); f('uStripeWidth', s.stripeWidth);
-    f('uExposure', s.exposure); f('uContrast', s.contrast); f('uSaturation', s.saturation); f('uGrain', s.grain);
-    f('uOpaque', s.bg === 'color' ? 1 : 0);
+    u.uExponent.value = 2 / (a * a) - 2;
+    u.uRefl.value = s.refl; u.uBlur.value = s.blur; u.uMetal.value = s.metal; u.uEnvRot.value = s.envRot * Math.PI / 180;
+    u.uEnv.value = { studio: 0, sky: 1, horizon: 2 }[s.env] ?? 0;
+    u.uRim.value = s.rim; u.uRimPow.value = 8 - s.rimWidth * 7.2;
+    u.uToon.value = s.toon ? 1 : 0; u.uSteps.value = s.steps; u.uToonSoft.value = s.toonSoft;
+    u.uOutline.value = s.outline; u.uStripes.value = s.stripes;
+    u.uStripeAngle.value = s.stripeAngle * Math.PI / 180; u.uStripeWidth.value = s.stripeWidth;
+    u.uExposure.value = s.exposure; u.uContrast.value = s.contrast; u.uSaturation.value = s.saturation; u.uGrain.value = s.grain;
     const lights = s.lights.slice(0, MAX_LIGHTS);
-    gl.uniform1i(u.uLights, lights.length);
-    const dir = new Float32Array(MAX_LIGHTS * 3), col = new Float32Array(MAX_LIGHTS * 3), wrap = new Float32Array(MAX_LIGHTS);
+    u.uLights.value = lights.length;
     lights.forEach((l, i) => {
-      dir.set(lightDir(l.x, l.y), i * 3);
-      col.set(hexToLinear(l.color).map(c => c * l.intensity), i * 3);
-      wrap[i] = l.softness;
+      u.uLightDir.value[i].fromArray(lightDir(l.x, l.y));
+      u.uLightCol.value[i].fromArray(hexToLinear(l.color)).multiplyScalar(l.intensity);
+      u.uLightWrap.value[i] = l.softness;
     });
-    gl.uniform3fv(u.uLightDir, dir); gl.uniform3fv(u.uLightCol, col); gl.uniform1fv(u.uLightWrap, wrap);
   }
 
-  function drawMatcap(s, size, opts = {}) {
-    gl.useProgram(matcap.p);
-    uniforms(opts.opaqueEdge ? { ...s, bg: 'transparent' } : s);
-    gl.uniform1f(matcap.loc.uPx, 2 / size);
-    gl.disable(gl.DEPTH_TEST);
-    gl.bindVertexArray(quad);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  // Draws into `target` (a render target, or null for the canvas) that is `size` pixels wide.
+  function draw(s, target, size) {
+    setParams(s);
+    uniforms.uPx.value = 2 / size;
+    uniforms.uLinearOut.value = target?.texture.colorSpace === THREE.SRGBColorSpace ? 1 : 0;
+    const prev = renderer.getRenderTarget();
+    renderer.setRenderTarget(target);
+    renderer.render(scene, camera);
+    renderer.setRenderTarget(prev);
   }
 
-  // Offscreen RGBA8 target, resized on demand.
-  function target() {
-    const t = { tex: gl.createTexture(), fb: gl.createFramebuffer(), size: 0 };
-    t.resize = size => {
-      if (t.size === size) return;
-      t.size = size;
-      gl.bindTexture(gl.TEXTURE_2D, t.tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, t.fb);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t.tex, 0);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    };
+  // srgb: an SRGB8_ALPHA8 texture for sampling (filtering happens in linear space);
+  // otherwise plain RGBA8 that stores the output bytes as they are (for reading back).
+  function makeTarget(size, { srgb = false } = {}) {
+    const t = new THREE.WebGLRenderTarget(size, size, { depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter });
+    if (srgb) t.texture.colorSpace = THREE.SRGBColorSpace;
     return t;
   }
-  const off = target();      // exports and thumbnails
-  const tex = target();      // matcap texture for the model view
 
-  // Renders into the offscreen target and returns RGBA bytes, top row first.
-  function readMatcap(s, size) {
-    off.resize(size);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, off.fb);
-    gl.viewport(0, 0, size, size);
-    drawMatcap(s, size);
+  // RGBA bytes of a matcap, top row first.
+  let readTarget = null;
+  function read(s, size) {
+    if (!readTarget || readTarget.width !== size) { readTarget?.dispose(); readTarget = makeTarget(size); }
+    draw(s, readTarget, size);
     const px = new Uint8Array(size * size * 4);
-    gl.readPixels(0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, px);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    const row = size * 4, tmp = new Uint8Array(row);                // GL rows go bottom-up
+    renderer.readRenderTargetPixels(readTarget, 0, 0, size, size, px);
+    const row = size * 4, tmp = new Uint8Array(row);           // GL rows go bottom-up
     for (let y = 0; y < size >> 1; y++) {
       const a = y * row, b = (size - 1 - y) * row;
       tmp.set(px.subarray(a, a + row)); px.copyWithin(a, b, b + row); px.set(tmp, b);
@@ -287,60 +236,5 @@ export function createRenderer(canvas) {
     return px;
   }
 
-  /* ── Model view ── */
-  const meshes = {};
-  function meshVao(name) {
-    if (meshes[name]) return meshes[name];
-    const m = MESHES[name]();
-    const vao = gl.createVertexArray();
-    gl.bindVertexArray(vao);
-    for (const [attr, data] of [['aPos', m.positions], ['aNor', m.normals]]) {
-      const loc = gl.getAttribLocation(mesh.p, attr);
-      gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
-    }
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.indices, gl.STATIC_DRAW);
-    return meshes[name] = { vao, count: m.indices.length };
-  }
-
-  let texKey = '';
-  function drawModel(s, shape, yaw, pitch) {
-    const key = JSON.stringify(s);
-    if (key !== texKey) {                      // the model samples the matcap as a texture
-      texKey = key;
-      tex.resize(512);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, tex.fb);
-      gl.viewport(0, 0, 512, 512);
-      drawMatcap(s, 512, { opaqueEdge: true });
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.enable(gl.DEPTH_TEST);
-    gl.useProgram(mesh.p);
-    const rot = rotation(yaw, pitch);
-    const view = mul([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -3.6, 1], rot);
-    gl.uniformMatrix4fv(mesh.loc.uMVP, false, mul(perspective(.6, canvas.width / canvas.height, .1, 20), view));
-    gl.uniformMatrix3fv(mesh.loc.uNM, false, [rot[0], rot[1], rot[2], rot[4], rot[5], rot[6], rot[8], rot[9], rot[10]]);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, tex.tex);
-    gl.uniform1i(mesh.loc.uTex, 0);
-    const m = meshVao(shape);
-    gl.bindVertexArray(m.vao);
-    gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
-  }
-
-  function drawSphere(s) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    drawMatcap(s, canvas.width);
-  }
-
-  return { gl, drawSphere, drawModel, readMatcap, maxSize: gl.getParameter(gl.MAX_TEXTURE_SIZE) };
+  return { draw, read, makeTarget, maxSize: renderer.capabilities.maxTextureSize };
 }

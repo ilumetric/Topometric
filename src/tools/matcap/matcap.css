@@ -45,6 +45,7 @@
 
 .mc-bar .ctl {
   display: block;
+  flex: none;
   min-height: 0
 }
 
@@ -333,4 +334,37 @@
   .mc-bar .ctl {
     display: block
   }
+}
+
+/* ── Model view extras ── */
+.mc-view.is-dragover {
+  outline: 2px dashed var(--text-dim);
+  outline-offset: -6px
+}
+
+.mc-busy {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  pointer-events: none
+}
+
+.mc-shapes .seg button {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+/* With "Extend" the sphere edge is invisible; a faint ring shows it (preview only) */
+.mc-view.is-extend::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px dashed rgba(255, 255, 255, .35);
+  border-radius: 50%;
+  pointer-events: none
 }

@@ -37,14 +37,14 @@ Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as qu
 - Up to four lights, placed by dragging them on the sphere: each one puts its highlight right where you drop it.
 - Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light.
 - Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.
-- Live 3D preview on a knot, torus or blob.
-- Save PNG at 256–2048 px, with a transparent or solid background. Undo with Ctrl+Z.
+- Live 3D preview on a knot, torus, blob or the Stanford Bunny — or drop your own model (GLB, GLTF, OBJ, FBX, STL).
+- Save PNG at 256–2048 px. Background: transparent, a solid color, or *Extend*, which stretches the edge colors outward so texture filtering never picks up a foreign color. Undo with Ctrl+Z.
 
 More tools are on the way.
 
 ## Privacy
 
-Your files never leave your computer. Textures are read, processed and saved by your browser. The page's Content Security Policy blocks all network requests (`connect-src 'none'`), so a tool can't upload anything even by mistake.
+Your files never leave your computer. Textures are read, processed and saved by your browser. The page's Content Security Policy only lets scripts read the site's own files and local `blob:`/`data:` URLs (`connect-src 'self' blob: data:`), so a tool can't upload anything even by mistake.
 
 ## Accuracy
 
@@ -57,7 +57,7 @@ Packing has to be exact, so Topometric avoids the shortcuts that quietly change 
 
 Browsers decode images at 8 bits per channel. 16-bit PNGs are converted, and the tool shows a note when that happens.
 
-Matcaps are shaded on the GPU in linear space with 4 samples per pixel; the sphere edge is antialiased from its exact coverage. The preview, the thumbnails and the saved file come from the same shader.
+Matcaps are shaded on the GPU in linear space with 4 samples per pixel; the sphere edge is antialiased from its exact coverage. The preview, the thumbnails and the saved file come from the same shader, and the file is read back from an 8-bit target without any color conversion.
 
 ## Running locally
 
@@ -86,6 +86,11 @@ src/
     dom.js, toast.js        small helpers
     controls.js             slider, color, segmented and switch controls
     codecs.js               TGA read/write, PNG write
+    three/
+      viewer.js             three.js viewer: orbit camera, fit to object, on-demand rendering
+      load-model.js         GLB/GLTF, OBJ, FBX, STL from local files
+  vendor/three/             three.js r186 (minified, MIT), mapped as `three` in index.html
+  assets/models/            sample models (Stanford Bunny)
   styles/base.css           design tokens, shell and control styles
   tools/
     registry.js             the list of tools
@@ -96,13 +101,15 @@ src/
     matcap/
       matcap.js             UI, light handles, undo, export
       matcap.css
-      renderer.js           WebGL 2 shaders: matcap sphere and model preview
-      meshes.js             procedural preview meshes
+      renderer.js           matcap shader (three.js RawShaderMaterial), export readback
+      meshes.js             preview shapes
       presets.js            defaults and presets
-scripts/serve.mjs           local dev server
+scripts/
+  serve.mjs                 local dev server
+  ply-to-glb.mjs            converts ASCII PLY to a compact GLB
 ```
 
-Plain HTML, CSS and JavaScript modules, with no framework, bundler or dependencies. A tool's code and styles load only when its page is first opened.
+Plain HTML, CSS and JavaScript modules, with no framework, bundler or package dependencies. A tool's code and styles load only when its page is first opened. Tools that need 3D import three.js with `import * as THREE from 'three'` and addons from `three/addons/…`; it's served from `src/vendor/three`, never from a CDN.
 
 ### Adding a tool
 
@@ -110,6 +117,7 @@ Plain HTML, CSS and JavaScript modules, with no framework, bundler or dependenci
 2. Put the styles in `src/tools/<id>/<id>.css`. Prefix class names, use the tokens from `base.css`, and build settings from `core/controls.js`.
 3. Add an entry to `src/tools/registry.js`. For a new icon, add a `<symbol id="i-…">` to the sprite in `index.html`.
 4. Move per-pixel work into a module worker, as `channel-packer/worker.js` does.
+5. For 3D, reuse `core/three/viewer.js` and `core/three/load-model.js`. A three.js addon that isn't vendored yet goes into `src/vendor/three/addons/` (see the README there). If you change the import map in `index.html`, update its `sha256` hash in the Content Security Policy.
 
 ## License
 
@@ -121,6 +129,11 @@ Topometric is source-available under the [PolyForm Noncommercial License 1.0.0](
 - ❌ Don't sell Topometric or its code, or run it as a paid, subscription or ad-supported service, without written permission.
 
 This summary is for convenience only; [LICENSE.md](LICENSE.md) is the binding text. For commercial licensing, contact the author on [GitHub](https://github.com/ilumetric).
+
+## Third-party
+
+- [three.js](https://threejs.org) — MIT license, see `src/vendor/three/LICENSE`.
+- Stanford Bunny — [Stanford 3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), Stanford University Computer Graphics Laboratory.
 
 ## Contributing
 

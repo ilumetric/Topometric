@@ -2,17 +2,23 @@
    A matcap is a picture of a lit sphere; renderers look up a surface's color by its
    view-space normal. Here the sphere is shaded by a fragment shader (renderer.js) from a
    small set of parameters: lights placed directly on the sphere, material, specular,
-   reflections, rim, stylization. The PNG is written byte for byte by our own encoder. */
+   reflections, rim, stylization. The model preview uses the shared three.js viewer, and
+   the PNG is written byte for byte by our own encoder. */
+import * as THREE from 'three';
 import { el, icon, downloadBlob } from '../../core/dom.js';
 import { encodePNG } from '../../core/codecs.js';
 import { slider, colorField, segmented, toggle } from '../../core/controls.js';
-import { createRenderer } from './renderer.js';
+import { createViewer } from '../../core/three/viewer.js';
+import { loadModel, isModelFile, MODEL_ACCEPT, MODEL_EXTENSIONS } from '../../core/three/load-model.js';
+import { createMatcapPainter } from './renderer.js';
+import { SHAPES, createShape } from './meshes.js';
 import { DEFAULTS, PRESETS, fromPreset } from './presets.js';
 
 const STORE_KEY = 'topometric-matcap-v1';
 const MAX_LIGHTS = 4;
 const SIZES = [256, 512, 1024, 2048];
 const THUMB = 96;
+const PREVIEW_TEX = 512;
 
 const TEMPLATE = `
   <header class="page-header">
@@ -28,11 +34,13 @@ const TEMPLATE = `
           <div class="mc-bar">
             <div data-ref="viewBar"></div>
             <div data-ref="shapeBar"></div>
+            <button type="button" class="btn btn-icon btn-ghost" data-ref="load" title="Load your model: ${MODEL_EXTENSIONS.join(', ').toUpperCase()}" aria-label="Load model"></button>
             <button type="button" class="btn btn-icon btn-ghost mc-undo" data-ref="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled></button>
           </div>
           <div class="mc-view" data-ref="view">
             <canvas data-ref="canvas"></canvas>
             <div class="mc-handles" data-ref="handles"></div>
+            <p class="mc-busy" data-ref="busy" hidden>Loading…</p>
           </div>
           <p class="mc-hint" data-ref="hint"></p>
         </div>
@@ -56,22 +64,24 @@ export function mount(root, { showToast }) {
   const r = {};
   root.querySelectorAll('[data-ref]').forEach(n => { r[n.dataset.ref] = n; });
   r.undo.append(icon('undo'));
+  r.load.append(icon('upload'));
 
   /* ── State ── */
   const saved = load();
   let p = saved?.p ? { ...structuredClone(DEFAULTS), ...saved.p } : fromPreset(PRESETS[0]);  // matcap parameters
   const out = { size: 512, bg: 'transparent', bgColor: '#000000', name: 'MatCap_Clay', ...saved?.out };
   const ui = { view: 'sphere', shape: 'knot', ...saved?.ui };
+  if (!SHAPES.some(([v]) => v === ui.shape)) ui.shape = 'knot';   // a loaded model is not kept between visits
   let sel = 0;                 // selected light
   let preset = saved ? -1 : 0; // highlighted preset
-  let yaw = .6, pitch = .35;
   let visible = false;
 
   const params = () => ({ ...p, bg: out.bg, bgColor: out.bgColor });
   let saveTimer = 0;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ p, out, ui })); } catch (_) { } }, 300);
+    const keep = { ...ui, shape: ui.shape === 'custom' ? 'knot' : ui.shape };
+    saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify({ p, out, ui: keep })); } catch (_) { } }, 300);
   }
 
   /* ── Undo ── */
@@ -105,17 +115,27 @@ export function mount(root, { showToast }) {
     undo();
   });
 
-  /* ── Renderer ── */
-  let gl = createRenderer(r.canvas);
-  if (!gl) {
+  /* ── Rendering: one WebGL context for the sphere, the model and the exports ── */
+  let viewer = null, painter = null, matcapTarget = null, matcapMaterial = null, texDirty = true;
+  try {
+    viewer = createViewer(r.canvas);
+    painter = createMatcapPainter(viewer.renderer);
+    matcapTarget = painter.makeTarget(PREVIEW_TEX, { srgb: true });
+    matcapMaterial = new THREE.MeshMatcapMaterial({ matcap: matcapTarget.texture, side: THREE.DoubleSide });
+    viewer.onBeforeRender = () => {
+      if (!texDirty) return;
+      texDirty = false;
+      painter.draw({ ...params(), bg: 'transparent' }, matcapTarget, PREVIEW_TEX);
+    };
+  } catch (err) {
+    console.error(err);
     r.view.replaceChildren(Object.assign(el('p', 'mc-empty'), { textContent: 'This tool needs WebGL 2. Try an up-to-date Chrome, Edge, Firefox or Safari.' }));
   }
-  r.canvas.addEventListener('webglcontextlost', e => e.preventDefault());
-  r.canvas.addEventListener('webglcontextrestored', () => { gl = createRenderer(r.canvas); drawThumbs(); changed(); });
 
   let raf = 0;
   function changed() {
     preset = preset >= 0 && JSON.stringify(p) === JSON.stringify(fromPreset(PRESETS[preset])) ? preset : -1;
+    texDirty = true;
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(render);
     save();
@@ -123,21 +143,94 @@ export function mount(root, { showToast }) {
   function render() {
     syncPresets();
     placeHandles();
-    root.querySelector('.mc-settings').classList.toggle('is-normal', p.mode === 'normal');
-    r.view.classList.toggle('is-model', ui.view === 'model');
-    r.view.classList.toggle('is-opaque', out.bg === 'color');
-    r.handles.hidden = ui.view !== 'sphere' || p.mode === 'normal';
-    r.hint.textContent = ui.view === 'model' ? 'Drag to rotate.'
+    const model = ui.view === 'model';
+    r.settings.classList.toggle('is-normal', p.mode === 'normal');
+    r.view.classList.toggle('is-model', model);
+    r.view.classList.toggle('is-opaque', out.bg !== 'transparent');
+    r.view.classList.toggle('is-extend', out.bg === 'extend' && !model);
+    r.handles.hidden = model || p.mode === 'normal';
+    r.hint.textContent = model ? 'Drag to orbit, scroll to zoom. Drop a model file here to preview it.'
       : p.mode === 'normal' ? 'Normal matcap: color = view-space normal.'
         : 'Click or drag on the sphere to move the selected light.';
-    if (!gl || !visible) return;
-    const dpr = Math.min(2, devicePixelRatio || 1), w = Math.round(r.view.clientWidth * dpr);
-    if (!w) return;
-    if (r.canvas.width !== w) { r.canvas.width = w; r.canvas.height = w; }
-    if (ui.view === 'model') gl.drawModel(params(), ui.shape, yaw, pitch);
-    else gl.drawSphere(params());
+    if (!viewer) return;
+    viewer.setEnabled(visible && model);
+    if (!visible) return;
+    if (model) { viewer.render(); return; }
+    if (!viewer.resize()) return;
+    const size = viewer.renderer.getDrawingBufferSize(new THREE.Vector2()).x;
+    painter.draw(params(), null, size);
   }
   new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(render); }).observe(r.view);
+
+  /* ── Model view: built-in shapes and the user's own model ── */
+  const shapes = new Map();          // shape id -> mesh/object with the matcap material
+  let customName = '';
+  function useMatcap(obj) {
+    obj.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of [].concat(o.material || [])) m.dispose?.();
+      o.material = matcapMaterial;
+    });
+    return obj;
+  }
+  let shapeToken = 0;
+  async function showShape() {
+    if (!viewer) return;
+    const id = ui.shape, token = ++shapeToken;
+    let obj = shapes.get(id);
+    if (!obj) {
+      r.busy.hidden = false;
+      try { obj = useMatcap(await createShape(id)); shapes.set(id, obj); }
+      catch (err) { console.error(err); showToast('Could not load the ' + id + ' model'); }
+      r.busy.hidden = true;
+    }
+    if (obj && token === shapeToken) viewer.setObject(obj, { dispose: false });
+  }
+
+  async function loadUserModel(files) {
+    if (!viewer) return;
+    r.busy.hidden = false;
+    try {
+      const { object, name } = await loadModel(files);
+      const old = shapes.get('custom');
+      if (old) {
+        if (viewer.getObject() === old) viewer.setObject(null, { dispose: false });
+        old.traverse(o => o.geometry?.dispose());
+      }
+      shapes.set('custom', useMatcap(object));
+      customName = name.replace(/\.[^.]+$/, '');
+      ui.shape = 'custom';
+      ui.view = 'model';
+      buildShapeBar();
+      viewCtl.sync();
+      viewer.resetView();
+      await showShape();
+      changed();
+    } catch (err) {
+      console.error(err);
+      showToast('Could not open the model: ' + err.message);
+    }
+    r.busy.hidden = true;
+  }
+
+  r.load.addEventListener('click', () => {
+    const f = Object.assign(document.createElement('input'), { type: 'file', accept: MODEL_ACCEPT + ',.bin,image/*', multiple: true });
+    f.onchange = () => f.files.length && loadUserModel([...f.files]);
+    f.click();
+  });
+  r.view.addEventListener('dragover', e => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    r.view.classList.add('is-dragover');
+  });
+  r.view.addEventListener('dragleave', () => r.view.classList.remove('is-dragover'));
+  r.view.addEventListener('drop', e => {
+    e.preventDefault();
+    r.view.classList.remove('is-dragover');
+    const files = [...e.dataTransfer.files];
+    if (files.some(isModelFile)) loadUserModel(files);
+    else showToast('Drop a ' + MODEL_EXTENSIONS.join(', ').toUpperCase() + ' file');
+  });
 
   /* ── Controls ── */
   const ctls = [];
@@ -249,16 +342,24 @@ export function mount(root, { showToast }) {
   renderLights();
 
   /* ── View: sphere or model ── */
-  r.viewBar.replaceWith(add(segmented({
+  const viewCtl = segmented({
     options: [['sphere', 'Sphere'], ['model', 'Model']],
-    get: () => ui.view, set: v => { ui.view = v; shapeCtl.el.hidden = v !== 'model'; }, onInput: changed,
-  })));
-  const shapeCtl = segmented({
-    options: [['knot', 'Knot'], ['torus', 'Torus'], ['blob', 'Blob']],
-    get: () => ui.shape, set: v => { ui.shape = v; }, onInput: changed,
+    get: () => ui.view,
+    set: v => { ui.view = v; shapeBar.hidden = v !== 'model'; if (v === 'model') showShape(); },
+    onInput: changed,
   });
-  shapeCtl.el.hidden = ui.view !== 'model';
-  r.shapeBar.replaceWith(add(shapeCtl));
+  r.viewBar.replaceWith(viewCtl.el);
+  let shapeBar = r.shapeBar;
+  function buildShapeBar() {
+    const options = SHAPES.concat(shapes.has('custom') ? [['custom', customName.length > 14 ? customName.slice(0, 13) + '…' : customName, customName]] : []);
+    const c = segmented({ options, get: () => ui.shape, set: v => { ui.shape = v; showShape(); }, onInput: changed });
+    c.el.classList.add('mc-shapes');
+    c.el.hidden = ui.view !== 'model';
+    shapeBar.replaceWith(c.el);
+    shapeBar = c.el;
+  }
+  buildShapeBar();
+  if (ui.view === 'model') showShape();
 
   /* ── Light handles on the sphere ── */
   function placeHandles() {
@@ -288,29 +389,24 @@ export function mount(root, { showToast }) {
     return [x, y];
   }
 
-  let drag = null;
+  // Sphere view only; in the model view the orbit controls own the pointer.
+  let drag = false;
   r.view.addEventListener('pointerdown', e => {
-    if (!gl || e.button !== 0) return;
+    if (!viewer || e.button !== 0 || ui.view !== 'sphere' || p.mode === 'normal') return;
     e.preventDefault();
     r.view.setPointerCapture(e.pointerId);
-    if (ui.view === 'model') { drag = { rotate: true, x: e.clientX, y: e.clientY }; return; }
-    if (p.mode === 'normal') return;
     const h = e.target.closest('.mc-handle');
     if (h) { sel = +h.dataset.i; renderLights(); ctls.forEach(c => c.sync()); }
     else { [p.lights[sel].x, p.lights[sel].y] = discPoint(e); }
-    drag = { light: true };
+    drag = true;
     changed();
   });
   r.view.addEventListener('pointermove', e => {
     if (!drag) return;
-    if (drag.rotate) {
-      yaw += (e.clientX - drag.x) * .01;
-      pitch = Math.max(-1.45, Math.min(1.45, pitch + (e.clientY - drag.y) * .01));
-      drag.x = e.clientX; drag.y = e.clientY;
-    } else [p.lights[sel].x, p.lights[sel].y] = discPoint(e);
+    [p.lights[sel].x, p.lights[sel].y] = discPoint(e);
     changed();
   });
-  const endDrag = () => { if (drag?.light) commit(); drag = null; };
+  const endDrag = () => { if (drag) commit(); drag = false; };
   r.view.addEventListener('pointerup', endDrag);
   r.view.addEventListener('pointercancel', endDrag);
   r.handles.addEventListener('keydown', e => {
@@ -348,21 +444,26 @@ export function mount(root, { showToast }) {
     return { b, c };
   });
   function drawThumbs() {
-    if (!gl) return;
+    if (!painter) return;
     PRESETS.forEach((pr, i) => {
-      const px = gl.readMatcap({ ...fromPreset(pr), bg: 'transparent', bgColor: '#000000' }, THUMB);
+      const px = painter.read({ ...fromPreset(pr), bg: 'transparent', bgColor: '#000000' }, THUMB);
       thumbs[i].c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), THUMB, THUMB), 0, 0);
     });
   }
   function syncPresets() { thumbs.forEach(({ b }, i) => b.setAttribute('aria-pressed', i === preset)); }
 
   /* ── Export ── */
-  const sizes = SIZES.filter(s => !gl || s <= gl.maxSize);
+  const sizes = SIZES.filter(s => !painter || s <= painter.maxSize);
   const bgColorCtl = colorField({ label: 'Color', get: () => out.bgColor, set: v => { out.bgColor = v; }, onInput: changed });
   const exportCtls = [
     segmented({ label: 'Size', options: sizes.map(s => [s, String(s)]), get: () => out.size, set: v => { out.size = v; }, onInput: save }),
     segmented({
-      label: 'Background', options: [['transparent', 'Transparent'], ['color', 'Color']],
+      label: 'Background',
+      options: [
+        ['transparent', 'Transparent', 'Transparent outside the sphere'],
+        ['color', 'Color', 'Solid color outside the sphere'],
+        ['extend', 'Extend', 'Stretch the edge colors outward (dilation), so filtering never picks up a foreign color'],
+      ],
       get: () => out.bg, set: v => { out.bg = v; bgColorCtl.el.hidden = v !== 'color'; }, onInput: changed,
     }),
     bgColorCtl,
@@ -381,13 +482,13 @@ export function mount(root, { showToast }) {
   const dl = el('button', 'btn btn-primary');
   dl.type = 'button';
   dl.append(icon('download'), document.createTextNode('Download PNG'));
-  dl.disabled = !gl;
+  dl.disabled = !painter;
   dl.addEventListener('click', async () => {
     dl.disabled = true;
     try {
-      const size = out.size, rgba = gl.readMatcap(params(), size);
+      const size = out.size, rgba = painter.read(params(), size);
       let px = rgba, ch = 4;
-      if (out.bg === 'color') {                         // opaque: drop the alpha channel
+      if (out.bg !== 'transparent') {                   // opaque: drop the alpha channel
         ch = 3;
         px = new Uint8Array(size * size * 3);
         for (let i = 0, o = 0; i < rgba.length; i += 4, o += 3) { px[o] = rgba[i]; px[o + 1] = rgba[i + 1]; px[o + 2] = rgba[i + 2]; }
@@ -407,6 +508,6 @@ export function mount(root, { showToast }) {
 
   return {
     show() { visible = true; changed(); },
-    hide() { visible = false; },
+    hide() { visible = false; viewer?.setEnabled(false); },
   };
 }
