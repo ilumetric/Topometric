@@ -1,0 +1,336 @@
+/* MatCap Generator — loaded together with the tool. */
+
+#page-matcap {
+  --content-w: 1120px
+}
+
+.mc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 20px;
+  align-items: start
+}
+
+.mc-stage {
+  position: sticky;
+  top: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px
+}
+
+.mc-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px
+}
+
+.mc-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: var(--surface)
+}
+
+/* ── Preview ── */
+.mc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center
+}
+
+.mc-bar .ctl {
+  display: block;
+  min-height: 0
+}
+
+.mc-undo {
+  margin-left: auto
+}
+
+.mc-view {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  aspect-ratio: 1;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 12px;
+  background: repeating-conic-gradient(#1f1f1f 0 25%, #171717 0 50%) 0 0 / 16px 16px;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none
+}
+
+.mc-view.is-model {
+  background: var(--panel-2);
+  cursor: grab
+}
+
+.mc-view.is-model:active {
+  cursor: grabbing
+}
+
+.mc-view.is-opaque:not(.is-model) {
+  background: none
+}
+
+.mc-view canvas {
+  display: block;
+  width: 100%;
+  height: 100%
+}
+
+.mc-handles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none
+}
+
+.mc-handle {
+  --c: #fff;
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--c);
+  color: #0b0b0b;
+  font: 700 11px var(--mono);
+  line-height: 20px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 2px 8px rgba(0, 0, 0, .5);
+  cursor: grab;
+  pointer-events: auto;
+  transition: transform .1s
+}
+
+.mc-handle[aria-pressed="true"] {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 0 0 5px rgba(255, 255, 255, .25), 0 2px 8px rgba(0, 0, 0, .5)
+}
+
+.mc-hint,
+.mc-tip {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center
+}
+
+.mc-tip {
+  text-align: left
+}
+
+.mc-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center
+}
+
+/* ── Export ── */
+.mc-save {
+  display: flex;
+  gap: 8px
+}
+
+.mc-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: var(--field);
+  font: 13px var(--mono)
+}
+
+.mc-name input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: inherit
+}
+
+.mc-name span {
+  color: var(--muted)
+}
+
+.mc-name:focus-within {
+  border-color: var(--ring)
+}
+
+/* ── Presets ── */
+.mc-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 6px
+}
+
+.mc-preset {
+  aspect-ratio: 1;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--panel-2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s
+}
+
+.mc-preset:hover {
+  background: var(--field)
+}
+
+.mc-preset[aria-pressed="true"] {
+  border-color: var(--text-dim);
+  background: var(--field)
+}
+
+.mc-preset canvas {
+  display: block;
+  width: 100%;
+  height: 100%
+}
+
+/* ── Settings ── */
+.mc-settings {
+  gap: 4px;
+  padding: 12px 16px
+}
+
+.mc-settings.is-normal .mc-sec {
+  opacity: .35;
+  pointer-events: none
+}
+
+.mc-sec {
+  border-top: 1px solid var(--stroke)
+}
+
+.mc-settings>.ctl {
+  margin-bottom: 8px
+}
+
+.mc-sec summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+  user-select: none
+}
+
+.mc-sec summary::-webkit-details-marker {
+  display: none
+}
+
+.mc-sec summary::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat center / 12px;
+  transition: transform .15s
+}
+
+.mc-sec[open] summary::after {
+  transform: rotate(180deg)
+}
+
+.mc-sec-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-bottom: 14px
+}
+
+.mc-lights {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px
+}
+
+.mc-chip {
+  --c: #fff;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--stroke-strong);
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font: 700 12px var(--mono);
+  cursor: pointer;
+  transition: border-color .15s, background .15s
+}
+
+.mc-chip[aria-pressed="true"] {
+  border-color: var(--c);
+  background: var(--field);
+  color: var(--text)
+}
+
+.mc-chip-add {
+  border-style: dashed;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 400
+}
+
+.mc-chip-add:hover {
+  color: var(--text)
+}
+
+.mc-remove {
+  justify-self: start;
+  height: 30px;
+  margin-top: 4px;
+  font-size: 13px
+}
+
+@media (max-width: 900px) {
+  .mc-layout {
+    grid-template-columns: minmax(0, 1fr)
+  }
+
+  .mc-stage {
+    position: static
+  }
+}
+
+@media (max-width: 480px) {
+  .mc-card {
+    padding: 12px
+  }
+
+  .mc-card .ctl {
+    grid-template-columns: 76px minmax(0, 1fr) auto
+  }
+
+  .mc-card .ctl-seg {
+    grid-template-columns: 76px minmax(0, 1fr)
+  }
+
+  .mc-card .ctl-toggle {
+    grid-template-columns: 76px auto
+  }
+
+  .mc-bar .ctl {
+    display: block
+  }
+}

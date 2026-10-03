@@ -15,4 +15,12 @@ export const TOOLS = [
     module: here('./channel-packer/channel-packer.js'),
     css: here('./channel-packer/channel-packer.css'),
   },
+  {
+    id: 'matcap',
+    title: 'MatCap Generator',
+    short: 'MatCap',
+    icon: 'matcap',
+    module: here('./matcap/matcap.js'),
+    css: here('./matcap/matcap.css'),
+  },
 ];

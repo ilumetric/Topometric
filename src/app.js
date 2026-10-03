@@ -94,9 +94,33 @@ function applySidebar(collapsed) {
   // Labels are hidden when collapsed, so they move into tooltips.
   sideLinks.forEach(a => { if (collapsed) a.title = a.getAttribute('aria-label'); else a.removeAttribute('title'); });
 }
+// The brand name types itself in on expand and erases back to "T" on collapse.
+const brandFull = $('.brand-full'), BRAND_TEXT = brandFull.textContent;
+let typing = 0;
+function typeBrand(erase, done) {
+  clearInterval(typing);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { brandFull.textContent = BRAND_TEXT; done?.(); return; }
+  let n = erase ? BRAND_TEXT.length : 1;
+  brandFull.textContent = BRAND_TEXT.slice(0, n);
+  brandFull.classList.add('is-typing');
+  typing = setInterval(() => {
+    n += erase ? -1 : 1;
+    brandFull.textContent = BRAND_TEXT.slice(0, n);
+    if (erase ? n <= 1 : n >= BRAND_TEXT.length) {
+      clearInterval(typing);
+      brandFull.classList.remove('is-typing');
+      brandFull.textContent = BRAND_TEXT;
+      done?.();
+    }
+  }, erase ? 24 : 42);
+}
+
+let collapsedTarget = document.body.classList.contains('sidebar-collapsed');
 function toggleSidebar() {
-  const collapsed = !document.body.classList.contains('sidebar-collapsed');
-  applySidebar(collapsed);
+  const collapsed = collapsedTarget = !collapsedTarget;
+  if (!matchMedia('(min-width: 769px)').matches) applySidebar(collapsed);   // top bar: nothing to animate
+  else if (collapsed) typeBrand(true, () => applySidebar(true));
+  else { applySidebar(false); typeBrand(false); }
   try { localStorage.setItem('topometric-sidebar-collapsed', collapsed ? '1' : '0'); } catch (_) { }
 }
 sidebarToggle.addEventListener('click', () => { toggleSidebar(); sidebarToggle.blur(); });

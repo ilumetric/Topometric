@@ -7,7 +7,7 @@
 //   { type: 'compose', seq, job }          pack channels, reply with a small preview
 //   { type: 'encode', seq, job, view, format }  pack (if needed) and encode a file
 // A job is { W, H, alpha, chans: [4 × ({ id, ch, inv } | { value })] }.
-import { encodePNG, encodeTGA } from './codecs.js';
+import { encodePNG, encodeTGA } from '../../core/codecs.js';
 
 const PREVIEW_MAX = 512;
 const inputs = new Map();   // id -> { w, h, data, planes: Map("WxH:c" -> Uint8ClampedArray) }

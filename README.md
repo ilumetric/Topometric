@@ -29,6 +29,17 @@ Packs channels from up to four textures into one map: ORM, masks, terrain splat 
 - Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG.
 - Drop a file on a texture card to replace it while keeping its wires.
 
+### MatCap Generator
+
+Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as quick materials.
+
+- 16 presets to start from: clay, wax, skin, jade, plastic, car paint, chrome, gold, toon, zebra, normal and more.
+- Up to four lights, placed by dragging them on the sphere: each one puts its highlight right where you drop it.
+- Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light.
+- Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.
+- Live 3D preview on a knot, torus or blob.
+- Save PNG at 256–2048 px, with a transparent or solid background. Undo with Ctrl+Z.
+
 More tools are on the way.
 
 ## Privacy
@@ -45,6 +56,8 @@ Packing has to be exact, so Topometric avoids the shortcuts that quietly change 
 - Heavy work runs in a background worker, so the page stays responsive with 4K and 8K maps.
 
 Browsers decode images at 8 bits per channel. 16-bit PNGs are converted, and the tool shows a note when that happens.
+
+Matcaps are shaded on the GPU in linear space with 4 samples per pixel; the sphere edge is antialiased from its exact coverage. The preview, the thumbnails and the saved file come from the same shader.
 
 ## Running locally
 
@@ -69,15 +82,23 @@ index.html                  shell: sidebar, page container, icon sprite, CSP
 src/
   app.js                    sidebar, routing (#tool-id), loading tools on demand
   boot.js                   restores the sidebar state before first paint
-  core/                     helpers shared by all tools
-  styles/base.css           design tokens and shell styles
+  core/
+    dom.js, toast.js        small helpers
+    controls.js             slider, color, segmented and switch controls
+    codecs.js               TGA read/write, PNG write
+  styles/base.css           design tokens, shell and control styles
   tools/
     registry.js             the list of tools
     channel-packer/
       channel-packer.js     UI and image decoding
       channel-packer.css
       worker.js             resampling, packing, encoding (Web Worker)
-      codecs.js             TGA read/write, PNG write
+    matcap/
+      matcap.js             UI, light handles, undo, export
+      matcap.css
+      renderer.js           WebGL 2 shaders: matcap sphere and model preview
+      meshes.js             procedural preview meshes
+      presets.js            defaults and presets
 scripts/serve.mjs           local dev server
 ```
 
@@ -86,7 +107,7 @@ Plain HTML, CSS and JavaScript modules, with no framework, bundler or dependenci
 ### Adding a tool
 
 1. Create `src/tools/<id>/<id>.js` that exports `mount(section, { showToast })`. It builds the tool inside the given `<section>` and may return `{ show(), hide() }`.
-2. Put the styles in `src/tools/<id>/<id>.css`. Prefix class names, and use the tokens from `base.css`.
+2. Put the styles in `src/tools/<id>/<id>.css`. Prefix class names, use the tokens from `base.css`, and build settings from `core/controls.js`.
 3. Add an entry to `src/tools/registry.js`. For a new icon, add a `<symbol id="i-…">` to the sprite in `index.html`.
 4. Move per-pixel work into a module worker, as `channel-packer/worker.js` does.
 

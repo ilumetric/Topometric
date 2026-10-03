@@ -6,7 +6,7 @@
    Decoding happens here (the browser decoder needs the main thread for WebGL);
    everything full-size — resampling, packing, encoding — runs in worker.js. */
 import { el, icon, downloadBlob } from '../../core/dom.js';
-import { parseTGA } from './codecs.js';
+import { parseTGA } from '../../core/codecs.js';
 
 const CH = ['R', 'G', 'B', 'A'];
 const COLORS = ['var(--ch-r)', 'var(--ch-g)', 'var(--ch-b)', 'var(--ch-a)'];
