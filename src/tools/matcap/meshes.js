@@ -1,11 +1,14 @@
-// Preview shapes for the model view. Each call returns a fresh THREE.Mesh;
-// the caller assigns the material. The bunny is loaded from a file on first use.
+// Preview shapes for the model view. Each call returns a fresh object (a mesh, or a
+// glTF scene with its node transforms); the caller assigns the material. Sample models are loaded from files on first use.
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const SHAPES = [['knot', 'Knot'], ['torus', 'Torus'], ['blob', 'Blob'], ['bunny', 'Bunny']];
+export const SHAPES = [['knot', 'Knot'], ['torus', 'Torus'], ['blob', 'Blob'], ['bunny', 'Bunny'], ['suzanne', 'Suzanne']];
 
-const BUNNY_URL = new URL('../../assets/models/stanford-bunny.glb', import.meta.url).href;
+const MODELS = {
+  bunny: new URL('../../assets/models/stanford-bunny.glb', import.meta.url).href,
+  suzanne: new URL('../../assets/models/blender-suzanne.glb', import.meta.url).href,
+};
 
 // Sphere with soft bumps. Vertices are welded first so normals are smooth across the UV seam.
 function blob() {
@@ -24,20 +27,17 @@ function blob() {
   return g;
 }
 
-async function bunny() {
+async function sampleModel(url) {
   const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-  const gltf = await new GLTFLoader().loadAsync(BUNNY_URL);
-  let geometry = null;
-  gltf.scene.traverse(o => { if (o.isMesh && !geometry) geometry = o.geometry; });
-  if (!geometry.attributes.normal) geometry.computeVertexNormals();
-  return geometry;
+  const { scene } = await new GLTFLoader().loadAsync(url);
+  scene.traverse(o => { if (o.isMesh && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });
+  return scene;
 }
 
 export async function createShape(name) {
-  const geometry =
+  if (MODELS[name]) return sampleModel(MODELS[name]);
+  return new THREE.Mesh(
     name === 'torus' ? new THREE.TorusGeometry(1, .42, 96, 192)
       : name === 'blob' ? blob()
-        : name === 'bunny' ? await bunny()
-          : new THREE.TorusKnotGeometry(1, .36, 400, 48, 2, 3);
-  return new THREE.Mesh(geometry);
+        : new THREE.TorusKnotGeometry(1, .36, 400, 48, 2, 3));
 }
