@@ -147,7 +147,6 @@ export function mount(root, { showToast }) {
     r.settings.classList.toggle('is-normal', p.mode === 'normal');
     r.view.classList.toggle('is-model', model);
     r.view.classList.toggle('is-opaque', out.bg !== 'transparent');
-    r.view.classList.toggle('is-extend', out.bg === 'extend' && !model);
     r.handles.hidden = p.mode === 'normal';
     r.handles.classList.toggle('is-over-model', model);
     r.hint.textContent = model ? 'Drag to orbit, scroll to zoom. Drag the dots to move lights. Drop a model file to preview it.'

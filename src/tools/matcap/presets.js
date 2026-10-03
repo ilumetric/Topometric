@@ -28,12 +28,13 @@ export const PRESETS = [
   {
     name: 'ORB Clay', base: '#adada7', ambient: .38, sky: '#d4ceef', ground: '#6d613d',
     lights: [L(.03, .13, .82, .28)], spec: .18, roughness: .64, rim: .21, rimColor: '#c8c2a1', rimWidth: .61,
-    edgeLight: .19, edgeShadow: .32,
+    edgeLight: .19, edgeShadow: .32, edgeShadowColor: '#352e17',
   },
   {
     name: 'ORB Clay Gloss', base: '#b0aca8', ambient: .43, sky: '#e0efff', ground: '#4a4a2e',
     lights: [L(.02, .11, .88, .27)], spec: .34, roughness: .61, refl: .22, blur: .2,
-    rim: .25, rimColor: '#dad1a5', rimWidth: .89, edgeLight: .16, edgeShadow: .32,
+    rim: .25, rimColor: '#dad1a5', rimWidth: .89,
+    edgeLight: .16, edgeShadow: .32, edgeShadowColor: '#352e17',
   },
   {
     name: 'Matte White', base: '#e4e4e4', ambient: .5, ground: '#8a8a8a',
