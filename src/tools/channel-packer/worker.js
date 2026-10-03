@@ -6,6 +6,7 @@
 //   { type: 'remove', id }
 //   { type: 'compose', seq, job }          pack channels, reply with a small preview
 //   { type: 'encode', seq, job, view, format }  pack (if needed) and encode a file
+//   { type: 'pixels', seq, job }          pack (if needed) and reply with the full RGBA bytes
 // A job is { W, H, alpha, chans: [4 × ({ id, ch, inv } | { value })] }.
 import { encodePNG, encodeTGA } from '../../core/codecs.js';
 
@@ -137,6 +138,11 @@ self.onmessage = async ({ data: m }) => {
         const img = pixels(compose(m.job), m.view);
         const blob = m.format === 'png' ? await encodePNG(img) : encodeTGA(img);
         self.postMessage({ type: 'encoded', seq: m.seq, blob });
+        break;
+      }
+      case 'pixels': {
+        const { W, H, data } = compose(m.job), copy = data.slice();
+        self.postMessage({ type: 'pixels', seq: m.seq, W, H, data: copy }, [copy.buffer]);
         break;
       }
     }

@@ -505,3 +505,17 @@
   opacity: .45;
   transition-delay: .2s
 }
+
+/* Send the packed map to Kuwahator */
+.pk-send {
+  height: 30px;
+  margin: 8px 0 0 6px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.pk-send .icon {
+  width: 15px;
+  height: 15px
+}

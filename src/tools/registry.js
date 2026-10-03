@@ -23,4 +23,12 @@ export const TOOLS = [
     module: here('./matcap/matcap.js'),
     css: here('./matcap/matcap.css'),
   },
+  {
+    id: 'kuwahator',
+    title: 'Kuwahator',
+    short: 'Kuwahara',
+    icon: 'brush',
+    module: here('./kuwahator/kuwahator.js'),
+    css: here('./kuwahator/kuwahator.css'),
+  },
 ];

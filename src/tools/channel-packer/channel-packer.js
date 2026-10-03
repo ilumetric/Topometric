@@ -3,16 +3,16 @@
    Wires are dragged from channel to channel. Alpha is written only when input A
    is connected and enabled; otherwise the file is saved without an alpha channel.
 
-   Decoding happens here (the browser decoder needs the main thread for WebGL);
+   Decoding happens here (core/image.js, the browser decoder needs the main thread);
    everything full-size — resampling, packing, encoding — runs in worker.js. */
 import { el, icon, downloadBlob } from '../../core/dom.js';
-import { parseTGA } from '../../core/codecs.js';
+import { sendTo } from '../../core/handoff.js';
+import { decodeImage as decode, IMAGE_ACCEPT as ACCEPT, isImageFile } from '../../core/image.js';
 
 const CH = ['R', 'G', 'B', 'A'];
 const COLORS = ['var(--ch-r)', 'var(--ch-g)', 'var(--ch-b)', 'var(--ch-a)'];
 const MAX_INPUTS = 4;
 const POW2 = [128, 256, 512, 1024, 2048, 4096, 8192];
-const ACCEPT = '.png,.jpg,.jpeg,.tga,.webp,.bmp,image/*';
 const DEFAULT_NAME = 'T_Packed_01';
 const INFO_TEXT = 'In Unreal, uncheck sRGB and set Compression Settings to Masks (no sRGB).';
 const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -74,58 +74,14 @@ const TEMPLATE = `
               <svg class="icon"><use href="#i-download" /></svg><span data-ref="downloadLabel">Download</span>
             </button>
           </div>
+          <button type="button" class="btn btn-ghost pk-send" data-ref="send" disabled title="Open the packed map in Kuwahator to paint it with brush strokes">
+            <svg class="icon"><use href="#i-brush" /></svg><span>Open in Kuwahator</span>
+          </button>
           <p class="pk-info" data-ref="info">${INFO_TEXT}</p>
         </div>
       </div>
     </div>
   </div>`;
-
-/* ═══ Decoding (main thread) ═══ */
-let gl;
-// WebGL returns pixels without premultiplication, so RGB under zero alpha survives intact.
-function readPixels(bitmap) {
-  if (!gl || gl.isContextLost()) gl = document.createElement('canvas').getContext('webgl', { premultipliedAlpha: false });
-  if (!gl) return null;
-  const { width: w, height: h } = bitmap;
-  const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-  if (w > max || h > max) return null;
-  const tex = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap);
-  const fb = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
-  let data = null;
-  if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE) {
-    data = new Uint8ClampedArray(w * h * 4);
-    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
-  }
-  gl.deleteFramebuffer(fb);
-  gl.deleteTexture(tex);
-  return data;
-}
-
-async function decode(file) {
-  if (/\.tga$/i.test(file.name)) return parseTGA(await file.arrayBuffer());
-  // Browsers decode images to 8 bits per channel only.
-  const head = new Uint8Array(await file.slice(0, 26).arrayBuffer());
-  const is16 = head[1] === 0x50 && head[2] === 0x4E && head[3] === 0x47 && head[24] === 16;
-  const bitmap = await createImageBitmap(file, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
-  let data = readPixels(bitmap), note = is16 ? '16-bit → 8-bit' : '';
-  if (!data) {
-    // Too big for WebGL: a 2D canvas stores premultiplied color.
-    note = 'Color under transparency may change';
-    const c = Object.assign(document.createElement('canvas'), { width: bitmap.width, height: bitmap.height });
-    const ctx = c.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0);
-    data = ctx.getImageData(0, 0, c.width, c.height).data;
-  }
-  const { width: w, height: h } = bitmap;
-  bitmap.close();
-  return { w, h, data, note };
-}
 
 // Small nearest-pixel copy for thumbnails, alpha ignored.
 function drawThumb(canvas, w, h, data, max) {
@@ -174,10 +130,10 @@ export function mount(root, { showToast }) {
       if (dirty) requestCompose();
       else if (m.type === 'composed' && m.seq === composeSeq) { out = m; renderPreview(); }
       previewBox.classList.toggle('is-busy', busy);
-    } else if (m.type === 'encoded' || (m.type === 'error' && m.op === 'encode')) {
+    } else if (m.type === 'encoded' || m.type === 'pixels' || (m.type === 'error' && (m.op === 'encode' || m.op === 'pixels'))) {
       const p = encodes.get(m.seq);
       encodes.delete(m.seq);
-      if (m.type === 'encoded') p?.resolve(m.blob); else p?.reject(new Error(m.message));
+      if (m.type === 'error') p?.reject(new Error(m.message)); else p?.resolve(m.type === 'pixels' ? m : m.blob);
     }
   };
   worker.onerror = e => { console.error(e); showToast('The processing worker failed to start'); };
@@ -191,11 +147,11 @@ export function mount(root, { showToast }) {
     previewBox.classList.toggle('is-busy', true);
   }
 
-  function encode(job) {
+  function encode(job, type = 'encode') {
     return new Promise((resolve, reject) => {
       const seq = ++encodeSeq;
       encodes.set(seq, { resolve, reject });
-      worker.postMessage({ type: 'encode', seq, job, view, format });
+      worker.postMessage({ type, seq, job, view, format });
     });
   }
 
@@ -467,6 +423,7 @@ export function mount(root, { showToast }) {
       syncSize();
       current = describe();
       downloadBtn.disabled = !current;
+      r.send.disabled = !current;
       // A without alpha is solid white, nothing to save
       chipA.disabled = !current || !current.job.alpha;
       if (view === '3' && chipA.disabled) setView('rgb');
@@ -519,13 +476,26 @@ export function mount(root, { showToast }) {
     if (b && !b.disabled) setView(b.dataset.view);
   });
 
+  const fileBase = () => (r.name.value.trim() || DEFAULT_NAME).replace(/\.(png|tga)$/i, '').replace(/[\\/:*?"<>|]/g, '_');
+
   downloadBtn.addEventListener('click', async () => {
     if (!current) return;
     downloadBtn.disabled = true;
-    const base = (r.name.value.trim() || DEFAULT_NAME).replace(/\.(png|tga)$/i, '').replace(/[\\/:*?"<>|]/g, '_');
-    try { downloadBlob(await encode(current.job), base + '.' + format); }
+    try { downloadBlob(await encode(current.job), fileBase() + '.' + format); }
     catch (err) { showToast('Could not save the file: ' + err.message); }
     downloadBtn.disabled = !current;
+  });
+
+  // The full packed map goes to Kuwahator, which opens with it.
+  r.send.addEventListener('click', async () => {
+    if (!current) return;
+    r.send.disabled = true;
+    try {
+      const { W, H, data } = await encode(current.job, 'pixels');
+      const base = fileBase();
+      sendTo('kuwahator', { name: base + ' (Channel Packer)', base, w: W, h: H, data });
+    } catch (err) { showToast('Could not send the map: ' + err.message); }
+    r.send.disabled = !current;
   });
 
   /* ── Loading files ── */
@@ -545,7 +515,7 @@ export function mount(root, { showToast }) {
   graph.addEventListener('drop', e => {
     e.preventDefault();
     graph.classList.remove('is-dragover');
-    const files = [...e.dataTransfer.files].filter(f => /^image\//.test(f.type) || /\.tga$/i.test(f.name));
+    const files = [...e.dataTransfer.files].filter(isImageFile);
     // A file dropped on a card replaces its texture.
     const card = e.target.closest?.('.pk-in');
     inputsEl.querySelectorAll('.is-target').forEach(c => c.classList.remove('is-target'));

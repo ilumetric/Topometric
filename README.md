@@ -28,6 +28,7 @@ Packs channels from up to four textures into one map: ORM, masks, terrain splat 
 - Save the full map, or a single channel as grayscale.
 - Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG.
 - Drop a file on a texture card to replace it while keeping its wires.
+- Open the packed map in Kuwahator with one click to paint it with brush strokes.
 
 ### MatCap Generator
 
@@ -39,6 +40,16 @@ Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as qu
 - Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.
 - Live 3D preview on a knot, torus, blob, the Stanford Bunny or Blender's Suzanne — or drop your own model (GLB, GLTF, OBJ, FBX, STL).
 - Save PNG at 256–2048 px (512 by default). Background: *Extend* (default), which stretches the edge colors outward so texture filtering never picks up a foreign color, a solid color, or transparent. Undo with Ctrl+Z.
+
+### Kuwahator
+
+Turns a texture into painted strokes with an anisotropic Kuwahara filter, the same kind of filter as Substance Designer's.
+
+- Radius, Smoothness, Sharpness and Anisotropy. Strokes follow the shapes of the image and edges stay crisp.
+- Color mode filters the image as a whole. Per channel mode treats each channel as its own grayscale mask with its own settings, and any channel can be left untouched — for packed maps.
+- A viewer made for checking detail: zoom to the cursor up to 6400 %, pan, fit or 1:1, a pixel grid when zoomed in, a before/after split and single-channel views. Keys: F fit, 1 actual pixels, C compare.
+- Runs on the GPU in tiles, starting where you look, so 4K and 8K maps stay responsive.
+- Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG. Alpha is kept when the source has it.
 
 More tools are on the way.
 
