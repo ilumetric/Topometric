@@ -1,0 +1,507 @@
+/* Channel Packer — loaded together with the tool. */
+
+#page-channel-packer {
+  --content-w: 1000px
+}
+
+.pk-graph {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 24px 88px;
+  align-items: start
+}
+
+.pk-wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none
+}
+
+.pk-wires path {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round
+}
+
+.pk-wires .pk-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: pointer
+}
+
+.pk-wires .pk-hit:hover+.pk-line {
+  stroke-width: 4
+}
+
+.pk-wires .pk-temp {
+  stroke-dasharray: 6 6
+}
+
+.pk-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px
+}
+
+.pk-node {
+  position: relative;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: var(--surface)
+}
+
+/* Input texture: preview, name and R G B A outputs on the right edge */
+.pk-in {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 128px;
+  padding: 12px 64px 12px 12px
+}
+
+.pk-pick {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  cursor: pointer
+}
+
+.pk-pick .icon {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+  opacity: 0;
+  transition: opacity .15s
+}
+
+.pk-pick::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .55);
+  opacity: 0;
+  transition: opacity .15s
+}
+
+.pk-pick .icon {
+  z-index: 1
+}
+
+.pk-pick:hover::after,
+.pk-pick:hover .icon,
+.pk-pick:focus-visible::after,
+.pk-pick:focus-visible .icon,
+.pk-in.is-target .pk-pick::after,
+.pk-in.is-target .pk-pick .icon {
+  opacity: 1
+}
+
+.pk-in.is-target {
+  border-color: var(--text-dim)
+}
+
+.pk-thumb {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  background: var(--field)
+}
+
+.pk-meta {
+  min-width: 0
+}
+
+.pk-meta b {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.pk-meta span {
+  color: var(--muted);
+  font-size: 12px
+}
+
+.pk-note {
+  display: block;
+  color: var(--warn) !important
+}
+
+.pk-remove {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .6);
+  opacity: 0;
+  transition: opacity .15s
+}
+
+.pk-remove .icon {
+  width: 14px;
+  height: 14px
+}
+
+.pk-in:hover .pk-remove,
+.pk-remove:focus-visible {
+  opacity: 1
+}
+
+.pk-socks {
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  display: grid;
+  gap: 6px;
+  transform: translateY(-50%)
+}
+
+.pk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  font: 600 12px var(--mono)
+}
+
+.pk-socks .pk-row {
+  justify-content: flex-end
+}
+
+.pk-row>span {
+  color: var(--muted)
+}
+
+.pk-sock {
+  --c: var(--ch-a);
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 2px solid var(--c);
+  border-radius: 50%;
+  background: var(--surface);
+  cursor: crosshair;
+  touch-action: none;
+  transition: transform .1s, background .1s
+}
+
+.pk-sock:hover,
+.pk-sock.is-pending {
+  transform: scale(1.3)
+}
+
+.pk-sock.is-linked,
+.pk-sock.is-pending {
+  background: var(--c)
+}
+
+.pk-sock:disabled {
+  opacity: .3;
+  cursor: default;
+  transform: none
+}
+
+.pk-sock[data-ch="0"] {
+  --c: var(--ch-r)
+}
+
+.pk-sock[data-ch="1"] {
+  --c: var(--ch-g)
+}
+
+.pk-sock[data-ch="2"] {
+  --c: var(--ch-b)
+}
+
+.pk-drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 88px;
+  padding: 16px 20px;
+  border: 1px dashed var(--stroke-strong);
+  border-radius: 18px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color .15s, background .15s
+}
+
+.pk-drop b {
+  color: var(--text);
+  font-weight: 500
+}
+
+.pk-drop .icon {
+  width: 20px;
+  height: 20px
+}
+
+.pk-drop:hover,
+.pk-graph.is-dragover .pk-drop {
+  border-color: var(--text-dim);
+  background: var(--hover)
+}
+
+/* Output: R G B A inputs on the left edge, then the preview */
+.pk-out {
+  padding: 16px 16px 16px 0
+}
+
+.pk-out-body {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center
+}
+
+.pk-out-socks {
+  display: grid;
+  gap: 14px;
+  margin-left: -8px
+}
+
+.pk-mini {
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px var(--mono);
+  cursor: pointer
+}
+
+.pk-mini:hover {
+  color: var(--text)
+}
+
+.pk-mini[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--active);
+  color: var(--text)
+}
+
+.pk-fill {
+  width: 22px;
+  padding: 0;
+  background: #000
+}
+
+.pk-fill[data-v="255"] {
+  background: #fff
+}
+
+.pk-view {
+  display: grid;
+  gap: 10px
+}
+
+.pk-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 12px;
+  background: repeating-conic-gradient(#1f1f1f 0 25%, #171717 0 50%) 0 0 / 16px 16px
+}
+
+.pk-preview canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain
+}
+
+.pk-empty {
+  position: absolute;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.pk-chips {
+  display: flex;
+  gap: 4px;
+  justify-content: center
+}
+
+.pk-chips button {
+  height: 26px;
+  min-width: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px var(--mono);
+  cursor: pointer
+}
+
+.pk-chips button[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--text)
+}
+
+.pk-chips button:disabled {
+  opacity: .35;
+  cursor: default
+}
+
+.pk-chips-sep {
+  align-self: center;
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--stroke-strong)
+}
+
+.pk-size {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0 0 16px;
+  color: var(--muted);
+  font-size: 13px
+}
+
+.pk-size select {
+  min-width: 0;
+  max-width: 100%;
+  height: 32px;
+  padding: 0 30px 0 12px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  appearance: none;
+  background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;
+  color: var(--text);
+  font: 13px var(--mono);
+  text-overflow: ellipsis;
+  cursor: pointer
+}
+
+.pk-size select:focus-visible {
+  outline: 0;
+  border-color: var(--ring)
+}
+
+#pkSize {
+  flex: 1 1 180px
+}
+
+.pk-custom {
+  display: flex;
+  gap: 6px;
+  align-items: center
+}
+
+.pk-custom[hidden] {
+  display: none
+}
+
+.pk-save {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 0 16px
+}
+
+.pk-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: var(--field);
+  font: 13px var(--mono)
+}
+
+.pk-name input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  font: inherit
+}
+
+.pk-name span {
+  color: var(--muted)
+}
+
+.pk-name:focus-within {
+  border-color: var(--ring)
+}
+
+.pk-format {
+  display: flex;
+  flex: none;
+  padding: 3px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px
+}
+
+.pk-format button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 12px var(--mono);
+  cursor: pointer
+}
+
+.pk-format button[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--text)
+}
+
+.pk-info {
+  margin: 10px 0 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5
+}
+
+@media (max-width: 760px) {
+  .pk-graph {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 48px
+  }
+}
+
+/* Long recompute: dim the preview, but only after a short delay so quick updates don't flicker */
+.pk-preview canvas {
+  transition: opacity .15s
+}
+
+.pk-preview.is-busy canvas {
+  opacity: .45;
+  transition-delay: .2s
+}

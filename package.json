@@ -1,0 +1,10 @@
+{
+  "name": "topometric",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free local tools for game artists. Everything runs in the browser.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs"
+  }
+}

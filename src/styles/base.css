@@ -1,0 +1,546 @@
+/* Topometric — shell styles shared by every tool.
+   Tool-specific styles live next to the tool and are loaded with it. */
+
+:root {
+  --sidebar-w: 260px;
+  --page-px: 40px;
+  --content-w: 960px;
+
+  --bg: #0b0b0b;
+  --sidebar-bg: #0b0b0b;
+  --surface: #141414;
+  --panel: #1c1c1c;
+  --panel-2: #171717;
+  --field: #262626;
+  --active: #262626;
+  --hover: rgba(255, 255, 255, .06);
+  --stroke: rgba(255, 255, 255, .08);
+  --stroke-strong: rgba(255, 255, 255, .16);
+  --muted: #9a9a9a;
+  --muted-2: #6b6b6b;
+  --text: #f3f3f3;
+  --text-dim: #c5c5c5;
+  --accent: #f3f3f3;
+  --accent-hover: #ffffff;
+  --accent-soft: rgba(255, 255, 255, .1);
+  --link: #7ab7ff;
+  --warn: #f59e0b;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, .12);
+  --ring: #7ab7ff;
+
+  --ch-r: #f87171;
+  --ch-g: #4ade80;
+  --ch-b: #60a5fa;
+  --ch-a: #d4d4d4;
+
+  --radius: 10px;
+  --font: ui-sans-serif, -apple-system, "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0
+}
+
+html,
+body {
+  height: 100%
+}
+
+body {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  height: 100dvh;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--bg);
+  font: 400 14px/1.6 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit
+}
+
+[hidden] {
+  display: none !important
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round
+}
+
+/* ── Buttons ── */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--stroke-strong);
+  color: var(--text)
+}
+
+.btn:disabled {
+  opacity: .4;
+  cursor: default
+}
+
+.btn[aria-pressed="true"] {
+  background: var(--active);
+  border-color: transparent;
+  color: var(--text)
+}
+
+.btn-icon {
+  width: 36px;
+  padding: 0
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0b0b
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #d4d4d4;
+  border-color: #d4d4d4;
+  color: #0b0b0b
+}
+
+.btn-danger {
+  color: var(--danger)
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  border-color: rgba(248, 113, 113, .4);
+  color: var(--danger)
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--sidebar-bg);
+  user-select: none
+}
+
+.sidebar-top {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  padding: 0 12px 0 20px
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  color: var(--text);
+  text-decoration: none;
+  transition: opacity .15s
+}
+
+.brand-short {
+  display: none
+}
+
+.sidebar-toggle {
+  color: var(--muted);
+  transition: opacity .15s, background .15s, color .15s
+}
+
+.sidebar-toggle:hover:not(:disabled) {
+  color: var(--text)
+}
+
+/* Collapsed sidebar: icons only and the short brand; hovering it reveals the expand button */
+@media (min-width: 769px) {
+  body {
+    transition: grid-template-columns .2s ease
+  }
+
+  .sidebar-collapsed {
+    --sidebar-w: 68px
+  }
+
+  .sidebar-collapsed .sidebar {
+    overflow-x: hidden
+  }
+
+  .sidebar-collapsed .sidebar-top {
+    justify-content: center;
+    padding: 0
+  }
+
+  .sidebar-collapsed .brand-full,
+  .sidebar-collapsed .nav-label,
+  .sidebar-collapsed .footer-label {
+    display: none
+  }
+
+  .sidebar-collapsed .brand-short {
+    display: inline
+  }
+
+  .sidebar-collapsed .sidebar-toggle {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0
+  }
+
+  .sidebar-collapsed .sidebar-top:hover .sidebar-toggle,
+  .sidebar-collapsed .sidebar-toggle:focus-visible {
+    opacity: 1
+  }
+
+  .sidebar-collapsed .sidebar-top:hover .sidebar-brand,
+  .sidebar-collapsed .sidebar-top:has(.sidebar-toggle:focus-visible) .sidebar-brand {
+    opacity: 0
+  }
+
+  .sidebar-collapsed .sidebar-nav a,
+  .sidebar-collapsed .sidebar-footer a {
+    justify-content: center;
+    padding: 0
+  }
+}
+
+.sidebar .icon {
+  width: 18px;
+  height: 18px
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -.3px
+}
+
+.sidebar-nav {
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  padding: 8px
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 15px;
+  text-decoration: none;
+  transition: background .15s
+}
+
+.sidebar-nav a:hover {
+  background: var(--hover)
+}
+
+.sidebar-nav a[aria-current="page"] {
+  background: var(--active);
+  font-weight: 500
+}
+
+.nav-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis
+}
+
+.nav-label-short {
+  display: none
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 8px
+}
+
+.sidebar-footer a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  text-decoration: none;
+  transition: background .15s, color .15s
+}
+
+.sidebar-footer a:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+/* ── Main & pages ── */
+.main {
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #34353f transparent;
+}
+
+.page {
+  display: none
+}
+
+.page.is-active {
+  display: block
+}
+
+.container {
+  width: min(100%, var(--content-w));
+  margin-inline: auto
+}
+
+.page-header {
+  padding: 32px var(--page-px) 12px
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -.4px
+}
+
+.page-header p {
+  margin-top: 4px;
+  color: var(--muted)
+}
+
+.page-body {
+  padding: 24px var(--page-px) 64px
+}
+
+.page-status {
+  padding: 48px var(--page-px);
+  color: var(--muted);
+  text-align: center
+}
+
+.page-status.error {
+  color: var(--danger)
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 20px;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  background: var(--field);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .5);
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  transition: opacity .2s, transform .2s;
+  pointer-events: none
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto
+}
+
+.toast-action {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-weight: 600;
+  cursor: pointer
+}
+
+.toast-action:hover {
+  text-decoration: underline
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+  :root {
+    --page-px: 24px
+  }
+}
+
+/* Narrow screens: the sidebar becomes a top bar */
+@media (max-width: 768px) {
+  :root {
+    --page-px: 16px
+  }
+
+  body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr)
+  }
+
+  .sidebar {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    height: auto;
+    padding: 0 8px 0 var(--page-px);
+    overflow: visible;
+    border-bottom: 1px solid var(--stroke)
+  }
+
+  .sidebar-top {
+    height: 56px;
+    padding: 0;
+    margin-right: auto
+  }
+
+  .sidebar-toggle {
+    display: none
+  }
+
+  .brand-name {
+    font-size: 17px
+  }
+
+  .sidebar-nav {
+    display: flex;
+    padding: 0
+  }
+
+  .sidebar-nav a {
+    height: 32px;
+    padding: 0 10px
+  }
+
+  .sidebar-nav .icon,
+  .nav-label,
+  .sidebar-footer .footer-label {
+    display: none
+  }
+
+  .nav-label-short {
+    display: inline
+  }
+
+  .sidebar-footer {
+    margin: 0;
+    padding: 0;
+    border: 0
+  }
+
+  .sidebar-footer a {
+    width: 36px;
+    padding: 0;
+    justify-content: center
+  }
+
+  .page-header {
+    padding-block: 24px 8px
+  }
+
+  .page-header h1 {
+    font-size: 22px
+  }
+}
+
+/* Very narrow: short labels don't fit, icons come back */
+@media (max-width: 480px) {
+  .sidebar-nav .icon {
+    display: block
+  }
+
+  .nav-label-short {
+    display: none
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important
+  }
+}
+
+.sprite {
+  position: absolute;
+  width: 0;
+  height: 0
+}
