@@ -3,6 +3,7 @@
 //   onInput  — fires on every change while dragging/typing
 //   onCommit — fires once the change is finished (used for undo)
 import { el } from './dom.js';
+import { openColorPicker } from './color-picker.js';
 
 function labelEl(text) {
   const s = el('span', 'ctl-label');
@@ -35,23 +36,28 @@ export function slider({ label, min, max, step, get, set, def, format, onInput, 
   return { el: root, sync };
 }
 
-// Color swatch (native picker) with its HEX code.
+// Color swatch with its HEX code; opens the shared color picker (wheel + HSL strips).
 export function colorField({ label, get, set, onInput, onCommit }) {
-  const root = el('label', 'ctl ctl-color');
-  const swatch = el('span', 'swatch');
-  const input = Object.assign(el('input'), { type: 'color' });
-  input.setAttribute('aria-label', label);
-  swatch.append(input);
+  const root = el('div', 'ctl ctl-color');
+  const swatch = el('button', 'swatch');
+  swatch.type = 'button';
+  swatch.setAttribute('aria-label', label);
+  swatch.setAttribute('aria-haspopup', 'dialog');
+  swatch.setAttribute('aria-expanded', 'false');
   const value = el('span', 'ctl-value');
   function sync() {
     const v = get();
-    input.value = v;
     value.textContent = v.toUpperCase();
     swatch.style.setProperty('--c', v);
   }
-  input.addEventListener('input', () => { set(input.value); sync(); onInput?.(); });
-  input.addEventListener('change', () => onCommit?.());
-  root.append(labelEl(label), swatch, value);
+  swatch.addEventListener('click', () => openColorPicker(swatch, {
+    value: get(),
+    onInput: v => { set(v); sync(); onInput?.(); },
+    onClose: changed => { if (changed) onCommit?.(); },
+  }));
+  const name = labelEl(label);
+  name.addEventListener('click', () => swatch.click());
+  root.append(name, swatch, value);
   sync();
   return { el: root, sync };
 }

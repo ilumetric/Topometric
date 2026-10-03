@@ -632,31 +632,24 @@ select {
   outline-offset: 6px
 }
 
-.ctl-color {
+.ctl-color .ctl-label {
   cursor: pointer
 }
 
 .swatch {
-  position: relative;
   width: 44px;
   height: 22px;
+  padding: 0;
   border: 1px solid var(--stroke-strong);
   border-radius: 999px;
-  background: var(--c, #000)
+  background: var(--c, #000);
+  cursor: pointer;
+  transition: border-color .15s
 }
 
-.swatch input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer
-}
-
-.swatch:has(input:focus-visible) {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px
+.swatch:hover,
+.swatch[aria-expanded="true"] {
+  border-color: var(--text-dim)
 }
 
 .ctl-seg {
@@ -729,4 +722,160 @@ select {
 .switch[aria-checked="true"]::after {
   background: var(--bg);
   transform: translateX(16px)
+}
+
+/* ── Color picker (src/core/color-picker.js) ── */
+.cp {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: 248px;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  background: var(--panel);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, .6)
+}
+
+.cp-wheel {
+  position: relative;
+  justify-self: center;
+  width: 184px;
+  height: 184px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  cursor: crosshair;
+  touch-action: none
+}
+
+.cp-wheel:focus-visible {
+  outline-offset: 4px
+}
+
+.cp-wheel canvas {
+  display: block;
+  width: 100%;
+  height: 100%
+}
+
+.cp-marker {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 2px 6px rgba(0, 0, 0, .5);
+  pointer-events: none
+}
+
+.cp-strip {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 38px;
+  gap: 10px;
+  align-items: center
+}
+
+.cp-strip-label {
+  color: var(--muted);
+  font: 600 11px var(--mono)
+}
+
+.cp-strip-value {
+  color: var(--text-dim);
+  font: 11px var(--mono);
+  text-align: right
+}
+
+.cp-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 12px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--track, var(--field));
+  cursor: pointer
+}
+
+.cp-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 2px 6px rgba(0, 0, 0, .5)
+}
+
+.cp-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6)
+}
+
+.cp-range::-moz-range-track {
+  background: transparent
+}
+
+.cp-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px
+}
+
+.cp-compare {
+  display: flex;
+  flex: none;
+  width: 56px;
+  height: 32px;
+  overflow: hidden;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px
+}
+
+.cp-new,
+.cp-old {
+  flex: 1
+}
+
+.cp-old {
+  padding: 0;
+  border: 0;
+  cursor: pointer
+}
+
+.cp-hex {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--field);
+  font: 600 12px var(--mono);
+  letter-spacing: .5px;
+  text-transform: uppercase
+}
+
+.cp-hex:focus {
+  outline: none;
+  border-color: var(--stroke-strong)
+}
+
+.cp-hex.is-invalid {
+  border-color: var(--danger)
+}
+
+.cp-pick {
+  flex: none;
+  width: 32px;
+  height: 32px
 }

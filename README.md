@@ -85,6 +85,7 @@ src/
   core/
     dom.js, toast.js        small helpers
     controls.js             slider, color, segmented and switch controls
+    color-picker.js         color wheel + HSL strips popover used by every color field
     codecs.js               TGA read/write, PNG write
     three/
       viewer.js             three.js viewer: orbit camera, fit to object, on-demand rendering
