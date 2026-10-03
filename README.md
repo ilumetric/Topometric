@@ -107,6 +107,7 @@ src/
 scripts/
   serve.mjs                 local dev server
   ply-to-glb.mjs            converts ASCII PLY to a compact GLB
+  strip-glb.mjs             removes unused vertex attributes (colors, UVs) from a GLB
 ```
 
 Plain HTML, CSS and JavaScript modules, with no framework, bundler or package dependencies. A tool's code and styles load only when its page is first opened. Tools that need 3D import three.js with `import * as THREE from 'three'` and addons from `three/addons/…`; it's served from `src/vendor/three`, never from a CDN.
