@@ -33,7 +33,7 @@ Packs channels from up to four textures into one map: ORM, masks, terrain splat 
 
 Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as quick materials.
 
-- 16 presets to start from: clay, wax, skin, jade, plastic, car paint, chrome, gold, toon, zebra, normal and more.
+- 18 presets to start from: clay, ORB Clay and ORB Clay Gloss (the popular ZBrush matcaps, recreated), wax, skin, jade, plastic, car paint, chrome, gold, toon, zebra, normal and more.
 - Up to four lights, placed by dragging them on the sphere — or over the 3D preview, in the same 2D layout: each one puts its highlight right where you drop it.
 - Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light.
 - Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.

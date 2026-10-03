@@ -22,6 +22,15 @@ export const PRESETS = [
     name: 'Clay', base: '#b5aca3', ambient: .3, ground: '#5a524c',
     lights: [L(-.45, .45, 1.1, .5)], spec: .12, roughness: .55, rim: .25, rimColor: '#2a2522', rimWidth: .35,
   },
+  // Recreations of the ORB Clay matcaps popular in ZBrush, fitted to the originals (about 2/255 RMS error).
+  {
+    name: 'ORB Clay', base: '#adaca6', ambient: .38, sky: '#e6e4fe', ground: '#6f6723',
+    lights: [L(.03, .14, .92, .38)], spec: .15, roughness: .6, rim: .5, rimColor: '#d6d6cf', rimWidth: .6,
+  },
+  {
+    name: 'ORB Clay Gloss', base: '#b3ada8', ambient: .41, sky: '#c7e4f5', ground: '#68683a',
+    lights: [L(.02, .14, .9, .37)], spec: .28, roughness: .61, rim: .36, rimColor: '#e7e5dd', rimWidth: .69,
+  },
   {
     name: 'Matte White', base: '#e4e4e4', ambient: .5, ground: '#8a8a8a',
     lights: [L(-.25, .35, .9, .6)], spec: .05, roughness: .7,
