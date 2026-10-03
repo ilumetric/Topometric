@@ -1,71 +1,106 @@
-# Topometric
+<p align="center">
+  <img src="favicon.svg" width="72" height="72" alt="">
+</p>
 
-Free tools for game artists that run entirely in your browser.
-Nothing is uploaded: textures are read, processed and saved on your own machine.
+<h1 align="center">Topometric</h1>
+
+<p align="center">
+  Free browser tools for game artists.<br>
+  Everything runs on your computer: no uploads, no accounts, no installs.
+</p>
+
+<p align="center">
+  <a href="https://ilumetric.github.io/Topometric/"><b>Open Topometric</b></a>
+</p>
+
+---
 
 ## Tools
 
-| Tool | What it does |
-| --- | --- |
-| **Channel Packer** | Packs channels from up to four textures into one RGB/RGBA map (ORM, masks and so on). Drag wires from input channels to output channels, invert, fill unused channels with black or white, resize, and save as TGA or PNG. |
+### Channel Packer
+
+Packs channels from up to four textures into one map: ORM, masks, terrain splat maps and the like.
+
+- Drag wires from any input channel (R, G, B, A) to any output channel.
+- Invert any channel. Fill unconnected channels with black or white.
+- Write alpha only when you need it; without it the file is saved as RGB.
+- Output size: auto (largest input), the size of any input, or a custom power of two up to 8192.
+- Save the full map, or a single channel as grayscale.
+- Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG.
+- Drop a file on a texture card to replace it while keeping its wires.
+
+More tools are on the way.
+
+## Privacy
+
+Your files never leave your computer. Textures are read, processed and saved by your browser. The page's Content Security Policy blocks all network requests (`connect-src 'none'`), so a tool can't upload anything even by mistake.
+
+## Accuracy
+
+Packing has to be exact, so Topometric avoids the shortcuts that quietly change pixel values:
+
+- Images are decoded without premultiplied alpha or color conversion. RGB under fully transparent pixels is preserved.
+- TGA and PNG files are written byte by byte, not through `<canvas>`, so saved values are exactly the packed ones.
+- Downscaling averages the exact area each output pixel covers; upscaling is linear.
+- Heavy work runs in a background worker, so the page stays responsive with 4K and 8K maps.
+
+Browsers decode images at 8 bits per channel. 16-bit PNGs are converted, and the tool shows a note when that happens.
 
 ## Running locally
 
-ES modules and Web Workers don't load from `file://`, so the site needs a static server. Any will do; one with no dependencies is included:
+ES modules and Web Workers don't load from `file://`, so the site needs a local web server. One is included and has no dependencies; it needs [Node.js](https://nodejs.org):
 
 ```bash
 npm start
 ```
 
-Then open <http://localhost:8080>. Without npm, `node scripts/serve.mjs` or `python -m http.server 8080` work the same way.
+Open <http://localhost:8080>. You can also run `node scripts/serve.mjs`, or use any static server, for example `python -m http.server 8080`.
 
-## Publishing on GitHub Pages
+## Deploying to GitHub Pages
 
-**Settings → Pages → Build and deployment → Deploy from a branch**, branch `main`, folder `/ (root)`.
+In the repository, open **Settings → Pages**. Under *Build and deployment*, choose **Deploy from a branch**, then branch `main` and folder `/ (root)`.
 
-No build step and no GitHub Actions: Pages serves the files as they are (`.nojekyll` turns off Jekyll processing).
-
-### Why hosting costs nothing
-
-- Pages only serves static files. All the work happens in the visitor's browser, so there is no server compute to pay for, however many people use the site.
-- No Actions workflow, so no CI minutes are used on deploy.
-- The site is small (tens of kilobytes) and each tool's code is loaded only when its page is opened.
-- The Content Security Policy in `index.html` forbids network requests (`connect-src 'none'`), so no tool can upload user files even by mistake.
-
-## Accuracy
-
-- Images are decoded without premultiplied alpha and without color conversion (WebGL readback), so RGB under fully transparent pixels is preserved.
-- TGA and PNG are read and written by hand-written codecs in `src/tools/channel-packer/codecs.js`, not through `<canvas>`, so saved values are exactly the packed ones.
-- Downscaling averages the exact covered area of source pixels; upscaling is linear.
-- Browsers decode images to 8 bits per channel; 16-bit PNGs are marked as converted.
+There is no build step and no GitHub Actions workflow. Pages serves the files as they are (`.nojekyll` turns off Jekyll). All processing happens in visitors' browsers, so hosting stays free however many people use the site.
 
 ## Project structure
 
 ```
 index.html                  shell: sidebar, page container, icon sprite, CSP
-favicon.svg
 src/
+  app.js                    sidebar, routing (#tool-id), loading tools on demand
   boot.js                   restores the sidebar state before first paint
-  app.js                    sidebar, hash routing (#tool-id), lazy loading of tools
-  core/                     helpers shared by all tools (DOM, toast)
+  core/                     helpers shared by all tools
   styles/base.css           design tokens and shell styles
   tools/
-    registry.js             list of tools
+    registry.js             the list of tools
     channel-packer/
-      channel-packer.js     UI and decoding (main thread)
+      channel-packer.js     UI and image decoding
       channel-packer.css
       worker.js             resampling, packing, encoding (Web Worker)
       codecs.js             TGA read/write, PNG write
-scripts/serve.mjs           dev server
+scripts/serve.mjs           local dev server
 ```
 
-Plain HTML, CSS and JavaScript modules — no framework, no bundler, no dependencies.
+Plain HTML, CSS and JavaScript modules, with no framework, bundler or dependencies. A tool's code and styles load only when its page is first opened.
 
-## Adding a tool
+### Adding a tool
 
-1. Create `src/tools/<id>/<id>.js` exporting `mount(section, { showToast })`. It fills the given `<section>` with the tool; it may return `{ show(), hide() }`.
-2. Put its styles in `src/tools/<id>/<id>.css`. Prefix class names to avoid clashes and reuse the tokens from `base.css`.
-3. Add an entry to `src/tools/registry.js`. If it needs a new icon, add a `<symbol id="i-…">` to the sprite in `index.html`.
-4. Move heavy per-pixel work into a module worker, as `channel-packer/worker.js` does.
+1. Create `src/tools/<id>/<id>.js` that exports `mount(section, { showToast })`. It builds the tool inside the given `<section>` and may return `{ show(), hide() }`.
+2. Put the styles in `src/tools/<id>/<id>.css`. Prefix class names, and use the tokens from `base.css`.
+3. Add an entry to `src/tools/registry.js`. For a new icon, add a `<symbol id="i-…">` to the sprite in `index.html`.
+4. Move per-pixel work into a module worker, as `channel-packer/worker.js` does.
 
-The tool's script and stylesheet are loaded only when its page is opened for the first time.
+## License
+
+Topometric is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md), with additional permissions. In short:
+
+- ✅ Use the tools for anything, including paid and commercial work.
+- ✅ The files you make with them are yours: use, publish and sell them, no credit needed.
+- ✅ Read, change and share the code for noncommercial purposes, keeping the license and copyright notice.
+- ❌ Don't sell Topometric or its code, or run it as a paid, subscription or ad-supported service, without written permission.
+
+This summary is for convenience only; [LICENSE.md](LICENSE.md) is the binding text. For commercial licensing, contact the author on [GitHub](https://github.com/ilumetric).
+
+## Contributing
+
+Bug reports and ideas for new tools are welcome in [Issues](https://github.com/ilumetric/Topometric/issues). By submitting a contribution, you agree that it may be distributed under this project's license, and under any future license the author chooses for Topometric.

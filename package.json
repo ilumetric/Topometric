@@ -4,6 +4,8 @@
   "private": true,
   "description": "Free local tools for game artists. Everything runs in the browser.",
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "author": "Max Derksen (https://github.com/ilumetric)",
   "scripts": {
     "start": "node scripts/serve.mjs"
   }
