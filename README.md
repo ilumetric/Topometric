@@ -35,7 +35,7 @@ Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as qu
 
 - 18 presets to start from: clay, ORB Clay and ORB Clay Gloss (the popular ZBrush matcaps, recreated), wax, skin, jade, plastic, car paint, chrome, gold, toon, zebra, normal and more.
 - Up to four lights, placed by dragging them on the sphere — or over the 3D preview, in the same 2D layout: each one puts its highlight right where you drop it.
-- Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light.
+- Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light, a thin edge light and an edge shadow that sets the sphere off the background.
 - Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.
 - Live 3D preview on a knot, torus, blob, the Stanford Bunny or Blender's Suzanne — or drop your own model (GLB, GLTF, OBJ, FBX, STL).
 - Save PNG at 256–2048 px (512 by default). Background: *Extend* (default), which stretches the edge colors outward so texture filtering never picks up a foreign color, a solid color, or transparent. Undo with Ctrl+Z.

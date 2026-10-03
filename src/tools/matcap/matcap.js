@@ -317,10 +317,12 @@ export function mount(root, { showToast }) {
       add(slider({ label: 'Metallic', min: 0, max: 1, step: .01, ...bind('metal') })),
       add(slider({ label: 'Rotation', min: -180, max: 180, step: 1, format: deg, ...bind('envRot') })),
     ]),
-    section('Rim', false, [
+    section('Rim & edge', false, [
       add(slider({ label: 'Strength', min: 0, max: 1, step: .01, ...bind('rim') })),
       add(slider({ label: 'Width', min: 0, max: 1, step: .01, ...bind('rimWidth') })),
       add(colorField({ label: 'Color', ...bind('rimColor') })),
+      add(slider({ label: 'Edge light', min: 0, max: 1, step: .01, ...bind('edgeLight') })),
+      add(slider({ label: 'Edge shadow', min: 0, max: 1, step: .01, ...bind('edgeShadow') })),
     ]),
     section('Stylize', false, [
       add(toggle({ label: 'Toon', ...bind('toon') })),

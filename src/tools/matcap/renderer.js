@@ -23,7 +23,7 @@ uniform int uMode;                 // 0 shaded, 1 normal
 uniform vec3 uBase, uSky, uGround, uScatterCol, uSpecCol, uRimCol, uOutlineCol, uStripeCol, uBg;
 uniform float uAmbient, uScatter, uSpec, uExponent, uRefl, uBlur, uMetal, uEnvRot, uRim, uRimPow;
 uniform float uToon, uSteps, uToonSoft, uOutline, uStripes, uStripeAngle, uStripeWidth;
-uniform float uExposure, uContrast, uSaturation, uGrain;
+uniform float uExposure, uContrast, uSaturation, uGrain, uEdgeLight, uEdgeShadow;
 uniform int uBgMode;               // 0 transparent, 1 solid color, 2 extend edge colors
 uniform float uLinearOut;          // 1 when drawing into an sRGB texture, which encodes on write
 uniform int uEnv, uLights;
@@ -101,6 +101,7 @@ vec3 shade(vec2 p) {
   vec3 F0 = mix(vec3(.06), albedo, uMetal);
   col += env(R) * (F0 + (1. - F0) * pow(1. - NV, 5.)) * uRefl;
   col = mix(col, uRimCol, clamp(pow(1. - NV, uRimPow) * uRim, 0., 1.));
+  col *= 1. + uEdgeLight * smoothstep(.95, .985, rr);   // thin light band along the edge
   if (uOutline > 0.) col = mix(col, uOutlineCol, smoothstep(1. - uOutline - uPx, 1. - uOutline + uPx, rr));
   return col;
 }
@@ -130,7 +131,9 @@ void main() {
   if (uLinearOut > .5) c = toLinear(c);
   float a = clamp((1. - length(vP)) / uPx + .5, 0., 1.);   // exact edge coverage
   // Outside the disc shade() keeps the edge normal, so "extend" is a radial dilation of the edge colors.
-  outColor = uBgMode == 2 ? vec4(c, 1.) : uBgMode == 1 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
+  // Edge shadow: a dark contour hugging the sphere that fades into the extended background.
+  float shadow = uEdgeShadow * exp(-max(length(vP) - 1., 0.) / .03);
+  outColor = uBgMode == 2 ? vec4(mix(c * (1. - shadow), c, a), 1.) : uBgMode == 1 ? vec4(mix(uBg, c, a), 1.) : vec4(c, a);
 }`;
 
 /* ── Color ── */
@@ -165,7 +168,7 @@ export function createMatcapPainter(renderer) {
   for (const k of ['uBase', 'uSky', 'uGround', 'uScatterCol', 'uSpecCol', 'uRimCol', 'uOutlineCol', 'uStripeCol', 'uBg']) uniforms[k] = { value: vec3() };
   for (const k of ['uAmbient', 'uScatter', 'uSpec', 'uExponent', 'uRefl', 'uBlur', 'uMetal', 'uEnvRot', 'uRim', 'uRimPow',
     'uToon', 'uSteps', 'uToonSoft', 'uOutline', 'uStripes', 'uStripeAngle', 'uStripeWidth',
-    'uExposure', 'uContrast', 'uSaturation', 'uGrain', 'uLinearOut']) uniforms[k] = { value: 0 };
+    'uExposure', 'uContrast', 'uSaturation', 'uGrain', 'uEdgeLight', 'uEdgeShadow', 'uLinearOut']) uniforms[k] = { value: 0 };
 
   const material = new THREE.RawShaderMaterial({
     glslVersion: THREE.GLSL3, vertexShader: VERTEX, fragmentShader: FRAGMENT, uniforms,
@@ -192,6 +195,7 @@ export function createMatcapPainter(renderer) {
     u.uToon.value = s.toon ? 1 : 0; u.uSteps.value = s.steps; u.uToonSoft.value = s.toonSoft;
     u.uOutline.value = s.outline; u.uStripes.value = s.stripes;
     u.uStripeAngle.value = s.stripeAngle * Math.PI / 180; u.uStripeWidth.value = s.stripeWidth;
+    u.uEdgeLight.value = s.edgeLight ?? 0; u.uEdgeShadow.value = s.edgeShadow ?? 0;
     u.uExposure.value = s.exposure; u.uContrast.value = s.contrast; u.uSaturation.value = s.saturation; u.uGrain.value = s.grain;
     const lights = s.lights.slice(0, MAX_LIGHTS);
     u.uLights.value = lights.length;
