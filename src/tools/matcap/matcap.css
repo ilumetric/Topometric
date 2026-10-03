@@ -368,3 +368,18 @@
   border-radius: 50%;
   pointer-events: none
 }
+
+/* Over the model the lights still sit on the matcap disc: show that disc while a light moves */
+.mc-handles.is-over-model .mc-handle {
+  opacity: .85
+}
+
+.mc-view.is-model.is-moving-light::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 1px dashed rgba(255, 255, 255, .3);
+  border-radius: 50%;
+  pointer-events: none
+}

@@ -14,7 +14,7 @@ import { createMatcapPainter } from './renderer.js';
 import { SHAPES, createShape } from './meshes.js';
 import { DEFAULTS, PRESETS, fromPreset } from './presets.js';
 
-const STORE_KEY = 'topometric-matcap-v1';
+const STORE_KEY = 'topometric-matcap-v2';
 const MAX_LIGHTS = 4;
 const SIZES = [256, 512, 1024, 2048];
 const THUMB = 96;
@@ -69,7 +69,7 @@ export function mount(root, { showToast }) {
   /* ── State ── */
   const saved = load();
   let p = saved?.p ? { ...structuredClone(DEFAULTS), ...saved.p } : fromPreset(PRESETS[0]);  // matcap parameters
-  const out = { size: 512, bg: 'transparent', bgColor: '#000000', name: 'MatCap_Clay', ...saved?.out };
+  const out = { size: 512, bg: 'extend', bgColor: '#000000', name: 'MatCap_Clay', ...saved?.out };
   const ui = { view: 'sphere', shape: 'knot', ...saved?.ui };
   if (!SHAPES.some(([v]) => v === ui.shape)) ui.shape = 'knot';   // a loaded model is not kept between visits
   let sel = 0;                 // selected light
@@ -148,8 +148,9 @@ export function mount(root, { showToast }) {
     r.view.classList.toggle('is-model', model);
     r.view.classList.toggle('is-opaque', out.bg !== 'transparent');
     r.view.classList.toggle('is-extend', out.bg === 'extend' && !model);
-    r.handles.hidden = model || p.mode === 'normal';
-    r.hint.textContent = model ? 'Drag to orbit, scroll to zoom. Drop a model file here to preview it.'
+    r.handles.hidden = p.mode === 'normal';
+    r.handles.classList.toggle('is-over-model', model);
+    r.hint.textContent = model ? 'Drag to orbit, scroll to zoom. Drag the dots to move lights. Drop a model file to preview it.'
       : p.mode === 'normal' ? 'Normal matcap: color = view-space normal.'
         : 'Click or drag on the sphere to move the selected light.';
     if (!viewer) return;
@@ -389,16 +390,20 @@ export function mount(root, { showToast }) {
     return [x, y];
   }
 
-  // Sphere view only; in the model view the orbit controls own the pointer.
+  // Lights live in the 2D disc of the matcap. On the sphere, a click anywhere places the
+  // selected light; over the model the same disc spans the viewport, lights move by their
+  // dots only, and a drag anywhere else orbits the camera.
   let drag = false;
   r.view.addEventListener('pointerdown', e => {
-    if (!viewer || e.button !== 0 || ui.view !== 'sphere' || p.mode === 'normal') return;
+    if (!viewer || e.button !== 0 || p.mode === 'normal') return;
+    const h = e.target.closest('.mc-handle');
+    if (ui.view === 'model' && !h) return;
     e.preventDefault();
     r.view.setPointerCapture(e.pointerId);
-    const h = e.target.closest('.mc-handle');
     if (h) { sel = +h.dataset.i; renderLights(); ctls.forEach(c => c.sync()); }
     else { [p.lights[sel].x, p.lights[sel].y] = discPoint(e); }
     drag = true;
+    r.view.classList.add('is-moving-light');
     changed();
   });
   r.view.addEventListener('pointermove', e => {
@@ -406,7 +411,7 @@ export function mount(root, { showToast }) {
     [p.lights[sel].x, p.lights[sel].y] = discPoint(e);
     changed();
   });
-  const endDrag = () => { if (drag) commit(); drag = false; };
+  const endDrag = () => { if (drag) commit(); drag = false; r.view.classList.remove('is-moving-light'); };
   r.view.addEventListener('pointerup', endDrag);
   r.view.addEventListener('pointercancel', endDrag);
   r.handles.addEventListener('keydown', e => {
@@ -460,9 +465,9 @@ export function mount(root, { showToast }) {
     segmented({
       label: 'Background',
       options: [
-        ['transparent', 'Transparent', 'Transparent outside the sphere'],
-        ['color', 'Color', 'Solid color outside the sphere'],
         ['extend', 'Extend', 'Stretch the edge colors outward (dilation), so filtering never picks up a foreign color'],
+        ['color', 'Color', 'Solid color outside the sphere'],
+        ['transparent', 'Transparent', 'Transparent outside the sphere'],
       ],
       get: () => out.bg, set: v => { out.bg = v; bgColorCtl.el.hidden = v !== 'color'; }, onInput: changed,
     }),
