@@ -442,6 +442,7 @@ export function mount(root, { showToast }) {
     r.layer.replaceChildren();
     lctls = [];
     arcCtl = null;
+    dirCtl = null;
     const L = cur();
     r.layer.hidden = !L;
     if (!L) return;
@@ -474,6 +475,11 @@ export function mount(root, { showToast }) {
       s('Bend', 'bend', 0, 1, .01, pct),
       s('Taper', 'taper', 0, 1, .01, pct),
       s('Round ends', 'round', 0, 1, .01, pct),
+      add(segmented({
+        label: 'Tips',
+        options: [['aligned', 'Aligned', 'Every tapered end points along the angle'], ['random', 'Random', 'Half of the strokes point the other way']],
+        ...bind('tips'),
+      })),
       s('Wobble', 'wobble', 0, 1, .01, pct),
       s('Streaks', 'streaks', 0, 1, .01, pct),
     );
@@ -531,13 +537,20 @@ export function mount(root, { showToast }) {
         options: GRAD_MODES[L.type].map(m => [m, ...GRAD_LABELS[m]]),
         get: () => GRAD_MODES[L.type].includes(cur().gradMode) ? cur().gradMode : GRAD_MODES[L.type][0],
         set: v => { cur().gradMode = v; },
-        onInput: () => changed(), onCommit: commit,
+        onInput: () => { changed(); syncLayerVisibility(); }, onCommit: commit,
+      })),
+      dirCtl = add(segmented({
+        label: 'Direction',
+        options: L.type === 'strokes'
+          ? [['fixed', 'Base → tip', 'Starts at the wide base and ends at the tapered tip of every stroke'], ['random', 'Random', 'Starts at a random end of each stroke']]
+          : [['fixed', 'Same', 'Starts at the same end of every shape'], ['random', 'Random', 'Starts at a random end of each shape']],
+        ...bind('gradDir'),
       })),
       s('Shapes', 'gradients', 0, 1, .01, pct),
       s('End tone', 'gradAmount', -1, 1, .01, v => (v > 0 ? '+' : '') + Math.round(v * 100) + '%'),
       add(toggle({ label: 'Both ways', ...bind('gradBoth') })),
       sub('Rotation'),
-      s('Angle', 'angle', 0, 180, 1, deg),
+      s('Angle', 'angle', 0, 360, 1, deg),
       s('Jitter', 'jitter', 0, 1, .01, pct),
       sub('Tone'),
       s('Tone min', 'toneMin', 0, 1, .01, pct),
@@ -551,13 +564,19 @@ export function mount(root, { showToast }) {
         ],
         ...bind('blend'),
       })),
-      tip('Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Gradient: Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets; Both ways lets half of them go the other way. Double-click a label to reset it.'),
+      tip('Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Angle counts counterclockwise: 90° points up. Gradient: Direction sets where it starts; Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets; Both ways lets half of them go the other way. Double-click a label to reset it.'),
     );
     syncLayerVisibility();
   }
-  let arcCtl = null;
+  let arcCtl = null, dirCtl = null;
   function syncLayerVisibility() {
-    if (arcCtl) arcCtl.hidden = cur()?.lineMode !== 'arc';
+    const L = cur();
+    if (arcCtl) arcCtl.hidden = L?.lineMode !== 'arc';
+    // a start and an end only exist for fills along or across a shape
+    if (dirCtl && L) {
+      const mode = GRAD_MODES[L.type].includes(L.gradMode) ? L.gradMode : GRAD_MODES[L.type][0];
+      dirCtl.hidden = mode !== 'along' && mode !== 'across';
+    }
   }
   function syncSummary() {
     const row = list.children[layers.length - 1 - sel];

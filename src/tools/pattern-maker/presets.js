@@ -20,7 +20,7 @@ export const PRESETS = [
     name: 'Bars',
     g: { seed: 3, bg: .22 },
     layers: [
-      ['strokes', { count: 110, spread: 'columns', sizeMin: .18, sizeMax: .42, stretch: 3.2, bend: 0, taper: .08, round: .55, wobble: 0, streaks: .35, angle: 90, jitter: .015, largeFirst: true, toneMin: .14, toneMax: .82, gradients: .35, gradMode: 'across', gradAmount: -.2, gradBoth: true }],
+      ['strokes', { count: 110, spread: 'columns', sizeMin: .18, sizeMax: .42, stretch: 3.2, bend: 0, taper: .08, round: .55, wobble: 0, streaks: .35, angle: 90, jitter: .015, largeFirst: true, toneMin: .14, toneMax: .82, gradients: .35, gradMode: 'across', gradDir: 'random', gradAmount: -.2, gradBoth: true }],
       ['strokes', { count: 70, spread: 'columns', sizeMin: .06, sizeMax: .14, stretch: 1.8, bend: 0, taper: 0, round: .8, wobble: 0, angle: 90, jitter: .015, toneMin: .1, toneMax: .6 }],
       ['shards', { count: 150, sizeMin: .015, sizeMax: .05, bias: -.4, sides: 4, irregular: 0, stretch: 3.5, gradients: 0, angle: 0, jitter: 0, toneMin: .15, toneMax: .95 }],
     ],
@@ -36,11 +36,19 @@ export const PRESETS = [
     ],
   },
   {
+    name: 'Grass',
+    g: { seed: 9, bg: .1 },
+    layers: [
+      ['strokes', { count: 360, sizeMin: .1, sizeMax: .22, stretch: 9, bend: .35, taper: 1, round: .4, wobble: .1, tips: 'aligned', angle: 90, jitter: .14, toneMin: .08, toneMax: .2, gradients: 1, gradMode: 'along', gradDir: 'fixed', gradAmount: .75 }],
+      ['strokes', { count: 260, sizeMin: .06, sizeMax: .14, stretch: 8, bend: .3, taper: 1, round: .4, wobble: .1, tips: 'aligned', angle: 90, jitter: .2, toneMin: .15, toneMax: .3, gradients: 1, gradMode: 'along', gradDir: 'fixed', gradAmount: .65 }],
+    ],
+  },
+  {
     name: 'Brush',
     g: { seed: 5, bg: .4 },
     layers: [
-      ['strokes', { count: 40, sizeMin: .14, sizeMax: .3, stretch: 2.6, bend: .3, taper: .3, round: .5, wobble: .3, toneMin: .16, toneMax: .3 }],
-      ['strokes', { count: 230, sizeMin: .05, sizeMax: .17, stretch: 3, bend: .25, taper: .45, round: .55, wobble: .3, angle: 30, toneMin: .3, toneMax: .72 }],
+      ['strokes', { tips: 'random', gradDir: 'random', count: 40, sizeMin: .14, sizeMax: .3, stretch: 2.6, bend: .3, taper: .3, round: .5, wobble: .3, toneMin: .16, toneMax: .3 }],
+      ['strokes', { tips: 'random', gradDir: 'random', count: 230, sizeMin: .05, sizeMax: .17, stretch: 3, bend: .25, taper: .45, round: .55, wobble: .3, angle: 30, toneMin: .3, toneMax: .72 }],
       ['lines', { count: 4, sizeMin: .3, sizeMax: .5, lineMode: 'arc', lines: 10, lineGap: .01, lineFill: .4, arcSpan: 70, ragged: .3, toneMin: .44, toneMax: .62, gradients: 1, gradAmount: -.25 }],
       ['lines', { count: 5, sizeMin: .22, sizeMax: .4, lines: 6, lineGap: .013, lineFill: .35, ragged: .4, angle: 50, toneMin: .5, toneMax: .62 }],
     ],

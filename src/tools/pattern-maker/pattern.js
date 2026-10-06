@@ -20,7 +20,7 @@ export const COMMON = {
   count: 60, spread: 'random', sizeMin: .05, sizeMax: .2, bias: 0, largeFirst: true,
   angle: 0, jitter: 1,
   toneMin: .3, toneMax: .7, opacity: 1, blend: 'normal',
-  gradients: 0, gradAmount: .4, gradBoth: false,
+  gradients: 0, gradAmount: .4, gradBoth: false, gradDir: 'random',
 };
 
 // Gradient fills each type offers, laid out in the shape's own frame:
@@ -40,7 +40,7 @@ export const GRAD_MODES = {
 // Settings of each layer type; they override COMMON where both have a value.
 export const TYPE_DEFAULTS = {
   shards: { count: 120, sizeMin: .04, sizeMax: .22, sides: 4, irregular: .6, stretch: 2.5, gradients: .15, gradAmount: .5, gradBoth: true, gradMode: 'linear' },
-  strokes: { gradMode: 'along', count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
+  strokes: { gradMode: 'along', gradDir: 'fixed', tips: 'random', count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
   circles: { gradMode: 'radial', count: 80, sizeMin: .02, sizeMax: .2, bias: -.4, stretch: 1, satellites: 0, satSize: .2, satContrast: -.3 },
   halftone: { gradMode: 'radial', count: 10, sizeMin: .12, sizeMax: .28, dotSpacing: .012, dotSize: .75, falloff: .6, rough: .5, breakup: .15, angle: 45, jitter: 0 },
   lines: { gradMode: 'along', count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
@@ -84,16 +84,20 @@ function place(ctx, S, x, y, a, rad, draw) {
 // Fill for one shape: its tone, or with probability `gradients` a gradient from its tone to
 // tone ± gradAmount, laid out by the shape's size in its own frame:
 //   g = { hx, hy }  half extents along and across the shape, r: radius for radial fills
+//   g.rev           the shape's start is at +x (a stroke whose tip points the other way)
+// Along and across start at the shape's start (gradDir 'fixed': a stroke's base, so the end
+// tone lands on the tip) or at a random end of each shape (gradDir 'random').
 //   g.arc = { s0, span, rIn, rOut }  arcs: "along" follows the arc, "across" goes ring to ring
 // Uses its own random stream, so gradient settings never move the shapes and shape
 // settings never reshuffle which shapes get a gradient.
 function shade(ctx, L, it, g) {
   const r = mulberry32(it.seed ^ 0x5BD1E995);
-  const on = r() < L.gradients, flip = r() < .5, dir = r() * TAU, sign = L.gradBoth && r() < .5 ? -1 : 1, k = .7 + .3 * r();
+  const on = r() < L.gradients, coin = r() < .5, dir = r() * TAU, sign = L.gradBoth && r() < .5 ? -1 : 1, k = .7 + .3 * r();
   const base = gray(it.tone);
   if (!on || !L.gradAmount) return base;
   const end = gray(it.tone + sign * L.gradAmount * k), modes = GRAD_MODES[L.type];
   const mode = modes.includes(L.gradMode) ? L.gradMode : modes[0];
+  const flip = L.gradDir === 'fixed' ? !!g.rev : coin;
   const [a, b] = flip ? [end, base] : [base, end];
   let fill;
   if (g.arc && mode === 'along' && ctx.createConicGradient) {
@@ -145,7 +149,8 @@ const SHAPES = {
   // Brush strokes and bars: a bent centre line with a width profile (taper, wobble, round caps).
   strokes(ctx, S, L, it, r) {
     const len = it.size, w = len / L.stretch / 2, bend = L.bend * (r() * 2 - 1) * len * .35;
-    const p1 = r() * TAU, p2 = r() * TAU, tail = r() < .5, N = 32;
+    // the tip (the tapered end) is at +x, so it points along the angle; 'random' turns half around
+    const p1 = r() * TAU, p2 = r() * TAU, tail = r() < .5 || L.tips !== 'random', N = 32;
     const cx = [], cy = [], nx = [], ny = [], hw = [];
     for (let i = 0; i <= N; i++) {
       const t = (1 - Math.cos(Math.PI * i / N)) / 2;            // denser near the ends, for round caps
@@ -168,7 +173,7 @@ const SHAPES = {
       for (let i = 0; i <= N; i++) sp[i ? 'lineTo' : 'moveTo'](cx[i] + nx[i] * hw[i] * v, cy[i] + ny[i] * hw[i] * v);
       streaks.push({ path: sp, width: w * (.04 + .1 * r()), tone: gray(it.tone + (r() - .5) * .5), alpha: L.streaks * (.4 + .6 * r()) });
     }
-    const fill = shade(ctx, L, it, { hx: len / 2, hy: w + Math.abs(bend) / 2, r: len / 2 });
+    const fill = shade(ctx, L, it, { hx: len / 2, hy: w + Math.abs(bend) / 2, r: len / 2, rev: !tail });
     place(ctx, S, it.x, it.y, it.a, len / 2 + Math.abs(bend) + w, () => {
       ctx.fillStyle = fill;
       ctx.fill(path);
@@ -278,7 +283,8 @@ function drawLayer(ctx, S, L, seed) {
     items.push({
       x: (x - Math.floor(x)) * S, y: (y - Math.floor(y)) * S,
       size: (lo + (hi - lo) * Math.pow(rnd(), pw)) * S,
-      a: (L.angle + (rnd() * 2 - 1) * L.jitter * 90) * Math.PI / 180,
+      // angles count counterclockwise, 90° points up (the canvas y axis points down)
+      a: -(L.angle + (rnd() * 2 - 1) * L.jitter * 90) * Math.PI / 180,
       tone: L.toneMin + (L.toneMax - L.toneMin) * rnd(),
       seed: (rnd() * 4294967296) >>> 0,
     });
