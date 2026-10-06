@@ -78,69 +78,83 @@ async function importFiles(files) {
   return added;
 }
 
+
+// The card's styles ship with this module (not in base.css), so a browser that still has an
+// older base.css cached never shows the card unstyled.
+const CSS = new URL('./presets.css', import.meta.url).href;
+if (![...document.styleSheets].some(s => s.href === CSS) && !document.querySelector(`link[href="${CSS}"]`)) {
+  document.head.append(Object.assign(document.createElement('link'), { rel: 'stylesheet', href: CSS }));
+}
+
 /* Preset card for a tool.
      tool      tool id (the storage list and the "tool" field of files)
-     builtins  [{ name, params }] shown first; they can't be deleted
+     builtins  [{ name, params }] shown first; they can't be renamed or deleted
      get       () => the current parameters (plain JSON data)
      normalize optional params => full params: fills in defaults and drops unknown keys, so a
                preset from an older or hand-edited file applies and highlights correctly
      apply     (params, { name, builtin }) => sets the (normalized) parameters
      thumb     optional (params, canvas) => draws a preview; without it presets are name chips
      labels    false: thumbnails only, names as tooltips
+     tile      smallest thumbnail width, px
      version   format version of this tool's params, saved with each preset
-   Returns { el, sync }; call sync() after the parameters change, to update the highlight. */
+   Returns { el, sync }; call sync() after the parameters change, to update the highlight.
+
+   Clicking a preset only ever applies it. Everything else — download, rename, delete,
+   import — sits in the ⋯ menu and acts on the selected preset, so nothing is hit by accident. */
 export function presetPicker({ tool, builtins = [], get, apply, normalize, thumb, labels = true, tile = 64, version = 1, showToast }) {
   const root = el('div', 'ps');
   const title = toolTitle(tool);
-
-  /* ── Header: Save, Import, Download all ── */
-  const head = el('div', 'vw-head ps-head');
-  const h = el('span');
-  h.textContent = 'Presets';
-  const tools = el('div', 'ps-tools');
-  const saveBtn = smallBtn('Save', 'Save the current settings as a preset', 'save');
-  const importBtn = smallBtn('Import', 'Add presets from .json files', 'upload');
-  const allBtn = smallBtn('', 'Download all your saved presets as one file', 'download');
-  tools.append(saveBtn, importBtn, allBtn);
-  head.append(h, tools);
-
-  /* ── Name form for saving ── */
-  const form = el('form', 'ps-form');
-  form.hidden = true;
-  const nameField = el('label', 'vw-name ps-name');
-  const input = Object.assign(el('input'), { maxLength: MAX_NAME, spellcheck: false, placeholder: 'Preset name' });
-  input.setAttribute('aria-label', 'Preset name');
-  nameField.append(input);
-  const ok = Object.assign(el('button', 'btn btn-primary ps-ok'), { type: 'submit', textContent: 'Save' });
-  const cancel = Object.assign(el('button', 'btn btn-ghost ps-cancel'), { type: 'button', textContent: 'Cancel' });
-  form.append(nameField, ok, cancel);
-
-  const grid = el('div', 'ps-list ' + (thumb ? 'is-tiles' : 'is-chips') + (labels ? '' : ' no-labels'));
-  grid.style.setProperty('--tile', tile + 'px');
-  grid.setAttribute('role', 'group');
-  grid.setAttribute('aria-label', title + ' presets');
-  const hint = el('p', 'vw-tip ps-hint');
-  hint.textContent = 'Your presets are kept in this browser. Download them to keep a copy or share them; Import or drop a .json file here to add them back.';
-  root.append(head, form, grid, hint);
-
   const norm = params => {
     try { return normalize ? normalize(structuredClone(params)) : structuredClone(params); }
     catch (err) { console.error(err); return structuredClone(params); }
   };
-  let user = readStore(tool);
-  let items = [];                       // rendered presets: { key, node }
-  let lastUser = '';                    // name of the saved preset picked or saved last: Save offers to update it
-  const thumbs = new Map();             // params key -> canvas, drawn once
 
-  function smallBtn(text, tip, iconName) {
-    const b = el('button', 'btn btn-ghost ps-btn' + (text ? '' : ' btn-icon'));
-    b.type = 'button';
-    b.title = tip;
-    if (!text) b.setAttribute('aria-label', tip);
-    b.append(icon(iconName));
-    if (text) b.append(document.createTextNode(text));
-    return b;
-  }
+  /* ── Header: Save and the ⋯ menu ── */
+  const head = el('div', 'ps-head');
+  const h = el('span', 'ps-title');
+  h.textContent = 'Presets';
+  const saveBtn = el('button', 'ps-hbtn');
+  saveBtn.type = 'button';
+  saveBtn.title = 'Save the current settings as a preset';
+  saveBtn.append(icon('save'), document.createTextNode('Save'));
+  const moreBtn = el('button', 'ps-hbtn ps-more');
+  moreBtn.type = 'button';
+  moreBtn.title = 'More: download, rename, delete, import';
+  moreBtn.setAttribute('aria-label', 'More preset actions');
+  moreBtn.setAttribute('aria-haspopup', 'menu');
+  moreBtn.setAttribute('aria-expanded', 'false');
+  moreBtn.append(icon('more'));
+  const menu = el('div', 'ps-menu');
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+  const right = el('div', 'ps-hright');
+  right.append(saveBtn, moreBtn, menu);
+  head.append(h, right);
+
+  /* ── Name form: save or rename ── */
+  const form = el('form', 'ps-form');
+  form.hidden = true;
+  const input = Object.assign(el('input', 'ps-input'), { maxLength: MAX_NAME, spellcheck: false, placeholder: 'Preset name' });
+  input.setAttribute('aria-label', 'Preset name');
+  const ok = Object.assign(el('button', 'ps-ok'), { type: 'submit', textContent: 'Save' });
+  const cancel = el('button', 'ps-cancel');
+  cancel.type = 'button';
+  cancel.title = 'Cancel (Esc)';
+  cancel.setAttribute('aria-label', 'Cancel');
+  cancel.append(icon('x'));
+  form.append(input, ok, cancel);
+
+  const list = el('div', 'ps-list ' + (thumb ? 'is-tiles' : 'is-chips') + (labels ? '' : ' no-labels'));
+  list.style.setProperty('--tile', tile + 'px');
+  list.setAttribute('role', 'group');
+  list.setAttribute('aria-label', title + ' presets');
+  root.append(head, form, list);
+
+  let user = readStore(tool);
+  let items = [];                       // rendered presets: { p, builtin, key, pick }
+  let picked = null;                    // the preset applied or saved last: { builtin, id | name }
+  let formMode = 'save', renaming = null;
+  const thumbs = new Map();             // params key -> { src, ready }
 
   // Each preview is drawn once per parameter set, then copied into the tile's own canvas
   // (the same parameters can show up twice, as a built-in and as a saved copy).
@@ -163,87 +177,83 @@ export function presetPicker({ tool, builtins = [], get, apply, normalize, thumb
   }
 
   function render() {
-    grid.replaceChildren();
+    list.replaceChildren();
     items = [];
-    const add = (p, builtin, index) => {
+    const add = (p, builtin) => {
       const params = norm(p.params), key = canon(params);
-      const node = el('div', 'ps-item' + (builtin ? '' : ' is-user'));
       const pick = el('button', 'ps-pick');
       pick.type = 'button';
-      pick.title = builtin ? p.name : p.name + ' — double-click to rename';
-      if (!labels) pick.setAttribute('aria-label', p.name);
+      pick.title = p.name;
       if (thumb) pick.append(preview(params, key));
-      const name = el('span', 'ps-label');
-      name.textContent = p.name;
-      if (labels || !thumb) pick.append(name);
+      if (labels || !thumb) {
+        const name = el('span', 'ps-label');
+        name.textContent = p.name;
+        pick.append(name);
+      } else pick.setAttribute('aria-label', p.name);
       pick.addEventListener('click', () => {
         apply(structuredClone(params), { name: p.name, builtin });
-        lastUser = builtin ? '' : p.name;
+        picked = builtin ? { builtin, name: p.name } : { builtin, id: p.id };
         sync();
       });
-      if (!builtin) pick.addEventListener('dblclick', () => rename(p, node));
-      const acts = el('div', 'ps-acts');
-      const dl = actBtn('Download this preset', 'download');
-      dl.addEventListener('click', () => downloadBlob(presetFile(tool, version, [p]), fileSafe(`${title} - ${p.name}.json`)));
-      acts.append(dl);
-      if (!builtin) {
-        const del = actBtn('Delete this preset', 'trash');
-        del.addEventListener('click', () => remove(index));
-        acts.append(del);
-      }
-      node.append(pick, acts);
-      grid.append(node);
-      items.push({ key, node });
+      list.append(pick);
+      items.push({ p, builtin, key, pick });
     };
     builtins.forEach(p => add(p, true));
-    if (user.length && builtins.length) {
+    if (user.length) {
       const sep = el('div', 'ps-sep');
       sep.textContent = 'Saved';
-      grid.append(sep);
+      list.append(sep);
     }
-    user.forEach((p, i) => add(p, false, i));
+    user.forEach(p => add(p, false));
     if (!builtins.length && !user.length) {
-      const empty = el('p', 'vw-tip ps-empty');
-      empty.textContent = 'No presets yet. Save the current settings to make one.';
-      grid.append(empty);
+      const empty = el('p', 'ps-empty');
+      empty.textContent = 'No presets yet — Save keeps the current settings as one.';
+      list.append(empty);
     }
-    allBtn.disabled = !user.length;
     sync();
   }
-  function actBtn(tip, iconName) {
-    const b = el('button', 'ps-act');
-    b.type = 'button';
-    b.title = tip;
-    b.setAttribute('aria-label', tip);
-    b.append(icon(iconName));
-    return b;
-  }
 
-  // Highlights every preset equal to the current parameters.
+  // Highlights the presets equal to the current settings.
+  let now = '';
   function sync() {
-    let now;
     try { now = canon(get()); } catch (_) { return; }
-    items.forEach(({ key, node }) => node.querySelector('.ps-pick').setAttribute('aria-pressed', key === now));
+    items.forEach(({ key, pick }) => pick.setAttribute('aria-pressed', key === now));
   }
 
-  function store(list, done) {
-    try { writeStore(tool, list); done?.(); }
+  // The preset the menu acts on: the one picked last if it still matches the settings,
+  // else any preset that matches, else the one picked last.
+  function target() {
+    const last = picked && items.find(i => i.builtin === picked.builtin && (i.builtin ? i.p.name === picked.name : i.p.id === picked.id));
+    if (last && last.key === now) return last;
+    return items.find(i => i.key === now && !i.builtin) || items.find(i => i.key === now) || last || null;
+  }
+
+  function store(next, done) {
+    try { writeStore(tool, next); done?.(); }
     catch (err) { console.error(err); showToast('Could not save presets: the browser\'s storage is full or blocked'); user = readStore(tool); render(); }
   }
 
-  /* ── Save ── */
+  /* ── Save and rename ── */
   const findUser = name => user.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
-  function syncOk() { ok.textContent = findUser(cleanName(input.value)) >= 0 ? 'Replace' : 'Save'; }
-  saveBtn.addEventListener('click', () => {
-    if (!form.hidden) { input.focus(); return; }
-    const now = canon(get()), same = user.find(p => canon(norm(p.params)) === now);
-    let n = user.length + 1;
-    while (findUser('Preset ' + n) >= 0) n++;
-    input.value = same ? same.name : lastUser && findUser(lastUser) >= 0 ? lastUser : 'Preset ' + n;
+  function syncOk() {
+    const name = cleanName(input.value), i = findUser(name);
+    ok.textContent = formMode === 'rename' ? 'Rename' : i >= 0 ? 'Replace' : 'Save';
+    ok.disabled = !name || (formMode === 'rename' && i >= 0 && user[i].id !== renaming.id);
+  }
+  function openForm(mode, value) {
+    formMode = mode;
+    input.value = value;
     form.hidden = false;
     syncOk();
     input.focus();
     input.select();
+  }
+  saveBtn.addEventListener('click', () => {
+    if (!form.hidden && formMode === 'save') { input.focus(); return; }
+    const t = target();
+    let n = user.length + 1;
+    while (findUser('Preset ' + n) >= 0) n++;
+    openForm('save', t && !t.builtin ? t.p.name : 'Preset ' + n);
   });
   input.addEventListener('input', syncOk);
   input.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); form.hidden = true; } });
@@ -251,49 +261,92 @@ export function presetPicker({ tool, builtins = [], get, apply, normalize, thumb
   form.addEventListener('submit', e => {
     e.preventDefault();
     const name = cleanName(input.value);
-    if (!name) { input.focus(); return; }
-    const params = structuredClone(get()), list = user.slice(), i = findUser(name);
-    if (i >= 0) list[i] = { ...list[i], params, v: version, at: Date.now() };
-    else list.push({ id: newId(), name, params, v: version, at: Date.now() });
-    store(list, () => { form.hidden = true; lastUser = name; showToast((i >= 0 ? 'Updated “' : 'Saved “') + name + '”'); });
+    if (!name || ok.disabled) return;
+    const next = user.slice();
+    if (formMode === 'rename') {
+      const i = next.findIndex(p => p.id === renaming.id);
+      if (i >= 0) next[i] = { ...next[i], name };
+      store(next, () => { form.hidden = true; });
+      return;
+    }
+    const params = structuredClone(get()), i = findUser(name);
+    let id;
+    if (i >= 0) { next[i] = { ...next[i], params, v: version, at: Date.now() }; id = next[i].id; }
+    else { id = newId(); next.push({ id, name, params, v: version, at: Date.now() }); }
+    store(next, () => {
+      form.hidden = true;
+      picked = { builtin: false, id };
+      showToast((i >= 0 ? 'Updated “' : 'Saved “') + name + '”');
+    });
   });
 
-  /* ── Rename, delete ── */
-  function rename(p, node) {
-    const label = node.querySelector('.ps-label');
-    if (!label || node.querySelector('.ps-rename')) return;
-    const field = Object.assign(el('input', 'ps-rename'), { value: p.name, maxLength: MAX_NAME, spellcheck: false });
-    field.setAttribute('aria-label', 'New name');
-    label.replaceWith(field);
-    field.focus();
-    field.select();
-    let done = false;
-    const finish = keep => {
-      if (done) return;
-      done = true;
-      const name = cleanName(field.value), i = user.findIndex(q => q.id === p.id);
-      if (!keep || !name || name === p.name || i < 0) { render(); return; }
-      if (user.some(q => q.id !== p.id && q.name.toLowerCase() === name.toLowerCase())) { showToast('A preset named “' + name + '” already exists'); render(); return; }
-      const list = user.slice();
-      list[i] = { ...list[i], name };
-      store(list);
-    };
-    field.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
-      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
-    });
-    field.addEventListener('blur', () => finish(true));
-    field.addEventListener('click', e => e.stopPropagation());
+  /* ── ⋯ menu ── */
+  function menuItem(text, iconName, onClick, danger) {
+    const b = el('button', 'ps-mi' + (danger ? ' is-danger' : ''));
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.append(icon(iconName));
+    const t = el('span');
+    t.textContent = text;
+    b.append(t);
+    b.addEventListener('click', () => { closeMenu(); onClick(); });
+    return b;
   }
-  function remove(i) {
-    const list = user.slice(), [gone] = list.splice(i, 1);
-    store(list, () => showToast('Deleted “' + gone.name + '”', {
+  function openMenu() {
+    const t = target();
+    menu.replaceChildren();
+    if (t) {
+      const name = el('div', 'ps-mlabel');
+      name.textContent = t.p.name + (t.builtin ? ' · built-in' : '');
+      menu.append(name, menuItem('Download', 'download', () => downloadBlob(presetFile(tool, version, [t.p]), fileSafe(`${title} - ${t.p.name}.json`))));
+      if (!t.builtin) {
+        menu.append(
+          menuItem('Rename…', 'pencil', () => { renaming = t.p; openForm('rename', t.p.name); }),
+          menuItem('Delete', 'trash', () => remove(t.p), true),
+        );
+      }
+      menu.append(el('hr'));
+    }
+    menu.append(menuItem('Import from file…', 'upload', pickFiles));
+    if (user.length) menu.append(menuItem(`Download all saved (${user.length})`, 'download', () => downloadBlob(presetFile(tool, version, user), fileSafe(`${title} - presets.json`))));
+    const tip = el('p', 'ps-mtip');
+    tip.textContent = 'Saved presets live in this browser. Download them to keep a copy; drop a .json on the list to add one.';
+    menu.append(tip);
+    menu.hidden = false;
+    moreBtn.setAttribute('aria-expanded', 'true');
+    menu.querySelector('.ps-mi')?.focus();
+    setTimeout(() => document.addEventListener('pointerdown', outside));
+  }
+  function closeMenu(focus) {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    moreBtn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', outside);
+    if (focus) moreBtn.focus();
+  }
+  const outside = e => { if (!right.contains(e.target)) closeMenu(); };
+  moreBtn.addEventListener('click', () => menu.hidden ? openMenu() : closeMenu());
+  menu.addEventListener('keydown', e => {
+    const all = [...menu.querySelectorAll('.ps-mi')], i = all.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); closeMenu(true); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      all[(i + (e.key === 'ArrowDown' ? 1 : -1) + all.length) % all.length]?.focus();
+    }
+  });
+
+  function remove(p) {
+    const i = user.findIndex(q => q.id === p.id);
+    if (i < 0) return;
+    const next = user.slice();
+    next.splice(i, 1);
+    store(next, () => showToast('Deleted “' + p.name + '”', {
       action: 'Undo',
-      onAction: () => { const back = readStore(tool); back.splice(Math.min(i, back.length), 0, gone); store(back); },
+      onAction: () => { const back = readStore(tool); back.splice(Math.min(i, back.length), 0, p); store(back); },
     }));
   }
 
-  /* ── Import and download ── */
+  /* ── Import ── */
   async function importAndReport(files) {
     const json = files.filter(f => /\.json$/i.test(f.name) || f.type === 'application/json');
     if (!json.length) { showToast('Drop a preset .json file'); return; }
@@ -301,16 +354,13 @@ export function presetPicker({ tool, builtins = [], get, apply, normalize, thumb
       const added = await importFiles(json);
       const parts = Object.entries(added).map(([t, n]) => `${n} preset${n > 1 ? 's' : ''}` + (t === tool ? '' : ' to ' + toolTitle(t)));
       showToast(parts.length ? 'Added ' + parts.join(', ') : 'These presets are already here');
-    } catch (err) { console.warn(err); showToast(err.message.includes('storage') ? 'Could not save presets: the browser\'s storage is full or blocked' : err.message); }
+    } catch (err) { console.warn(err); showToast(err.name === 'QuotaExceededError' ? 'Could not save presets: the browser\'s storage is full or blocked' : err.message); }
   }
-  importBtn.addEventListener('click', () => {
+  function pickFiles() {
     const f = Object.assign(document.createElement('input'), { type: 'file', accept: '.json,application/json', multiple: true });
     f.onchange = () => f.files.length && importAndReport([...f.files]);
     f.click();
-  });
-  allBtn.addEventListener('click', () => {
-    if (user.length) downloadBlob(presetFile(tool, version, user), fileSafe(`${title} - presets.json`));
-  });
+  }
   root.addEventListener('dragover', e => {
     if (!e.dataTransfer.types.includes('Files')) return;
     e.preventDefault();

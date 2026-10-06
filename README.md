@@ -83,9 +83,9 @@ More tools are on the way.
 
 MatCap Generator, Kuwahator, Tile Maker and Pattern Maker share one preset system:
 
-- Each tool's built-in presets and your own sit in the same list. **Save** stores the current settings under a name; saving under an existing name updates that preset. Double-click a saved preset to rename it.
-- A preset holds only settings, never images, so it's a few kilobytes.
-- Saved presets live in your browser. Download one preset, or all of them at once, as a `.json` file to keep a copy or share it. **Import** (or drop a file on the list) adds them back. A file knows which tool it's for, so importing it from any tool's page adds it to the right list.
+- Each tool's built-in presets and your own sit in the same list; clicking one only applies it. **Save** stores the current settings under a name; saving under an existing name updates that preset.
+- The **⋯** menu acts on the selected preset — download, rename, delete (with undo) — and imports files or downloads all saved presets at once.
+- A preset holds only settings, never images, so it's a few kilobytes. Saved presets live in your browser; download them as `.json` to keep a copy or share them, and import them (or drop a file on the list) to add them back. A file knows which tool it's for, so importing it from any tool's page adds it to the right list.
 
 ## Privacy
 
@@ -130,7 +130,7 @@ src/
   core/
     dom.js, toast.js        small helpers
     controls.js             slider, color, segmented and switch controls
-    presets.js              preset card shared by the tools: built-in and saved presets, JSON import/export
+    presets.js, presets.css preset card shared by the tools: built-in and saved presets, JSON import/export
     color-picker.js         color wheel + HSL strips popover used by every color field
     codecs.js               TGA read/write, PNG write
     three/
