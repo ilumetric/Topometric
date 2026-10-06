@@ -11,10 +11,19 @@ import { slider, segmented, toggle } from '../../core/controls.js';
 import { createViewer } from '../../core/image-viewer.js';
 import { receive, sendTo } from '../../core/handoff.js';
 import { createCloner } from './clone-gpu.js';
+import { presetPicker, mergeKnown } from '../../core/presets.js';
 
 const STORE_KEY = 'topometric-tile-maker-v1';
 const SAMPLE_SIZE = 1024;
 const DEFAULTS = { method: 'cut', seam: .15, soft: 3, heal: true, healWidth: 20, equalize: .7, scale: .25 };
+// Built-in presets: seams and lighting settings.
+const PRESETS = [
+  ['Default', DEFAULTS],
+  ['Soft blend', { method: 'blend', seam: .25, heal: false, equalize: .5, scale: .3 }],
+  ['Fine detail', { method: 'cut', seam: .1, soft: 1, heal: true, healWidth: 12, equalize: .7, scale: .2 }],
+  ['Large stones', { method: 'cut', seam: .3, soft: 4, heal: true, healWidth: 36, equalize: .8, scale: .35 }],
+  ['Keep light', { equalize: 0 }],
+];
 const BRUSH = { size: 48, hardness: .5, opacity: 1 };
 const SIZES = [512, 1024, 2048, 4096, 8192];
 
@@ -56,6 +65,7 @@ const TEMPLATE = `
         <p class="vw-hint" data-ref="hint"></p>
       </div>
       <div class="vw-panel">
+        <div class="vw-card" data-ref="presets"></div>
         <div class="vw-card" data-ref="seams"></div>
         <div class="vw-card" data-ref="light"></div>
         <div class="vw-card" data-ref="clone"></div>
@@ -234,7 +244,8 @@ export function mount(root, { showToast }) {
   /* ── Settings ── */
   const ctls = [];
   const add = c => { ctls.push(c); return c.el; };
-  const changed = () => { run(); save(); };
+  let presets = null;                     // the preset card, made below
+  const changed = () => { run(); save(); presets?.sync(); };
   const bind = key => ({ get: () => p[key], set: v => { p[key] = v; }, def: DEFAULTS[key], onInput: changed });
   function head(text, keys, onReset) {
     const h = el('div', 'vw-head');
@@ -279,6 +290,17 @@ export function mount(root, { showToast }) {
     tip('Evens out light and color that change across the photo, so the tiles don\'t form a grid of bright and dark patches. Scale is the size of the changes to remove; smaller removes more.'),
   );
   syncSettings();
+
+  /* ── Presets (core/presets.js): the seams and lighting settings ── */
+  presets = presetPicker({
+    tool: 'tile-maker',
+    builtins: PRESETS.map(([name, q]) => ({ name, params: { ...DEFAULTS, ...q } })),
+    get: () => p,
+    normalize: q => mergeKnown(DEFAULTS, q),
+    apply(q) { Object.assign(p, q); syncSettings(); changed(); },
+    showToast,
+  });
+  r.presets.append(presets.el);
 
   /* ── Clone brush ──
      Alt+click picks the source; the first stroke fixes the offset between source and

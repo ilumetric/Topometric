@@ -13,6 +13,7 @@ import { loadModel, isModelFile, MODEL_ACCEPT, MODEL_EXTENSIONS } from '../../co
 import { createMatcapPainter } from './renderer.js';
 import { SHAPES, createShape } from './meshes.js';
 import { DEFAULTS, PRESETS, fromPreset } from './presets.js';
+import { presetPicker, mergeKnown } from '../../core/presets.js';
 
 const STORE_KEY = 'topometric-matcap-v2';
 const MAX_LIGHTS = 4;
@@ -47,9 +48,7 @@ const TEMPLATE = `
         <div class="mc-card mc-export" data-ref="export"></div>
       </div>
       <div class="mc-panel">
-        <div class="mc-card">
-          <div class="mc-presets" data-ref="presets" role="group" aria-label="Presets"></div>
-        </div>
+        <div class="mc-card" data-ref="presets"></div>
         <div class="mc-card mc-settings" data-ref="settings"></div>
       </div>
     </div>
@@ -73,7 +72,6 @@ export function mount(root, { showToast }) {
   const ui = { view: 'sphere', shape: 'knot', ...saved?.ui };
   if (!SHAPES.some(([v]) => v === ui.shape)) ui.shape = 'knot';   // a loaded model is not kept between visits
   let sel = 0;                 // selected light
-  let preset = saved ? -1 : 0; // highlighted preset
   let visible = false;
 
   const params = () => ({ ...p, bg: out.bg, bgColor: out.bgColor });
@@ -102,7 +100,6 @@ export function mount(root, { showToast }) {
     committed = history.pop();
     p = JSON.parse(committed);
     sel = Math.min(sel, p.lights.length - 1);
-    preset = -1;
     r.undo.disabled = !history.length;
     refresh();
     save();
@@ -134,14 +131,13 @@ export function mount(root, { showToast }) {
 
   let raf = 0;
   function changed() {
-    preset = preset >= 0 && JSON.stringify(p) === JSON.stringify(fromPreset(PRESETS[preset])) ? preset : -1;
     texDirty = true;
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(render);
     save();
   }
   function render() {
-    syncPresets();
+    presets.sync();
     placeHandles();
     const model = ui.view === 'model';
     r.settings.classList.toggle('is-normal', p.mode === 'normal');
@@ -430,34 +426,37 @@ export function mount(root, { showToast }) {
     renderLights(); changed(); commit();
   });
 
-  /* ── Presets ── */
-  const thumbs = PRESETS.map((pr, i) => {
-    const b = el('button', 'mc-preset');
-    b.type = 'button';
-    b.title = pr.name;
-    b.setAttribute('aria-label', pr.name);
-    const c = el('canvas');
-    c.width = c.height = THUMB;
-    b.append(c);
-    b.addEventListener('click', () => {
-      p = fromPreset(pr);
+  /* ── Presets: the built-in matcaps and the user's own (core/presets.js) ── */
+  // Reads parameters from a preset file: known keys only, 1 to 4 valid lights.
+  function fromParams(pp) {
+    const q = mergeKnown(DEFAULTS, pp);
+    const lights = (Array.isArray(pp?.lights) ? pp.lights : []).slice(0, MAX_LIGHTS).map(l => mergeKnown(DEFAULTS.lights[0], l));
+    q.lights = lights.length ? lights : structuredClone(DEFAULTS.lights);
+    return q;
+  }
+  const presets = presetPicker({
+    tool: 'matcap',
+    builtins: PRESETS.map(pr => ({ name: pr.name, params: fromPreset(pr) })),
+    get: () => p,
+    normalize: fromParams,
+    apply(pp, { name }) {
+      p = pp;
       sel = 0;
-      preset = i;
-      out.name = 'MatCap_' + pr.name.replace(/\s+/g, '');
+      out.name = 'MatCap_' + name.replace(/[^\w-]+/g, '');
       exportCtls.forEach(c => c.sync());
       refresh(); commit();
-    });
-    r.presets.append(b);
-    return { b, c };
+    },
+    thumb: painter && ((pp, canvas) => {
+      const px = painter.read({ ...pp, bg: 'transparent', bgColor: '#000000' }, THUMB);
+      canvas.width = canvas.height = THUMB;
+      canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), THUMB, THUMB), 0, 0);
+      changed();                          // reading the thumbnail used the shared canvas: draw the view again
+    }),
+    labels: false,
+    tile: 52,
+    showToast,
   });
-  function drawThumbs() {
-    if (!painter) return;
-    PRESETS.forEach((pr, i) => {
-      const px = painter.read({ ...fromPreset(pr), bg: 'transparent', bgColor: '#000000' }, THUMB);
-      thumbs[i].c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(px.buffer), THUMB, THUMB), 0, 0);
-    });
-  }
-  function syncPresets() { thumbs.forEach(({ b }, i) => b.setAttribute('aria-pressed', i === preset)); }
+  r.presets.append(presets.el);
 
   /* ── Export ── */
   const sizes = SIZES.filter(s => !painter || s <= painter.maxSize);
@@ -510,7 +509,6 @@ export function mount(root, { showToast }) {
   tip.textContent = 'Blender: Preferences → Lights → MatCaps → Install. ZBrush: load it as a MatCap material.';
   r.export.append(...exportCtls.filter(c => c.el).map(c => add(c)), saveRow, tip);
 
-  drawThumbs();
   changed();
 
   return {

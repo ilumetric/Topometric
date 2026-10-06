@@ -20,15 +20,30 @@ export const COMMON = {
   count: 60, spread: 'random', sizeMin: .05, sizeMax: .2, bias: 0, largeFirst: true,
   angle: 0, jitter: 1,
   toneMin: .3, toneMax: .7, opacity: 1, blend: 'normal',
+  gradients: 0, gradAmount: .4, gradBoth: false,
+};
+
+// Gradient fills each type offers, laid out in the shape's own frame:
+//   along   from one end of the shape to the other (random which end)
+//   across  from one side to the other
+//   linear  in a random direction per shape
+//   radial  from the middle to the edge
+//   spot    from an off-centre highlight; the offset points the same way on every shape
+export const GRAD_MODES = {
+  shards: ['linear', 'along', 'radial'],
+  strokes: ['along', 'across', 'radial'],
+  circles: ['radial', 'spot', 'linear'],
+  halftone: ['radial', 'linear'],
+  lines: ['along', 'across', 'radial'],
 };
 
 // Settings of each layer type; they override COMMON where both have a value.
 export const TYPE_DEFAULTS = {
-  shards: { count: 120, sizeMin: .04, sizeMax: .22, sides: 4, irregular: .6, stretch: 2.5, gradients: .15 },
-  strokes: { count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
-  circles: { count: 80, sizeMin: .02, sizeMax: .2, bias: -.4, stretch: 1, satellites: 0, satSize: .2, satContrast: -.3 },
-  halftone: { count: 10, sizeMin: .12, sizeMax: .28, dotSpacing: .012, dotSize: .75, falloff: .6, rough: .5, breakup: .15, angle: 45, jitter: 0 },
-  lines: { count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
+  shards: { count: 120, sizeMin: .04, sizeMax: .22, sides: 4, irregular: .6, stretch: 2.5, gradients: .15, gradAmount: .5, gradBoth: true, gradMode: 'linear' },
+  strokes: { gradMode: 'along', count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
+  circles: { gradMode: 'radial', count: 80, sizeMin: .02, sizeMax: .2, bias: -.4, stretch: 1, satellites: 0, satSize: .2, satContrast: -.3 },
+  halftone: { gradMode: 'radial', count: 10, sizeMin: .12, sizeMax: .28, dotSpacing: .012, dotSize: .75, falloff: .6, rough: .5, breakup: .15, angle: 45, jitter: 0 },
+  lines: { gradMode: 'along', count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
 };
 
 export function newLayer(type, over) {
@@ -66,6 +81,49 @@ function place(ctx, S, x, y, a, rad, draw) {
   }
 }
 
+// Fill for one shape: its tone, or with probability `gradients` a gradient from its tone to
+// tone ± gradAmount, laid out by the shape's size in its own frame:
+//   g = { hx, hy }  half extents along and across the shape, r: radius for radial fills
+//   g.arc = { s0, span, rIn, rOut }  arcs: "along" follows the arc, "across" goes ring to ring
+// Uses its own random stream, so gradient settings never move the shapes and shape
+// settings never reshuffle which shapes get a gradient.
+function shade(ctx, L, it, g) {
+  const r = mulberry32(it.seed ^ 0x5BD1E995);
+  const on = r() < L.gradients, flip = r() < .5, dir = r() * TAU, sign = L.gradBoth && r() < .5 ? -1 : 1, k = .7 + .3 * r();
+  const base = gray(it.tone);
+  if (!on || !L.gradAmount) return base;
+  const end = gray(it.tone + sign * L.gradAmount * k), modes = GRAD_MODES[L.type];
+  const mode = modes.includes(L.gradMode) ? L.gradMode : modes[0];
+  const [a, b] = flip ? [end, base] : [base, end];
+  let fill;
+  if (g.arc && mode === 'along' && ctx.createConicGradient) {
+    const { s0, span } = g.arc, f = Math.min(1, span / TAU);
+    fill = ctx.createConicGradient(s0, 0, 0);
+    fill.addColorStop(0, a); fill.addColorStop(f, b); fill.addColorStop(1, b);
+    return fill;
+  }
+  if (g.arc && mode !== 'along') {
+    fill = ctx.createRadialGradient(0, 0, g.arc.rIn, 0, 0, g.arc.rOut);
+    fill.addColorStop(0, a); fill.addColorStop(1, b);
+    return fill;
+  }
+  if (mode === 'radial') {
+    fill = ctx.createRadialGradient(0, 0, 0, 0, 0, g.r);
+    fill.addColorStop(0, base); fill.addColorStop(1, end);
+  } else if (mode === 'spot') {
+    // the highlight sits up and to the left in the texture, whatever the shape's rotation
+    const c = Math.cos(-it.a), s = Math.sin(-it.a), wx = -.38 * g.hx, wy = -.38 * g.hy;
+    const ox = wx * c - wy * s, oy = wx * s + wy * c;
+    fill = ctx.createRadialGradient(ox, oy, 0, ox * .5, oy * .5, g.r * 1.3);
+    fill.addColorStop(0, end); fill.addColorStop(1, base);
+  } else {
+    const [x, y] = mode === 'along' ? [g.hx, 0] : mode === 'across' ? [0, g.hy] : [Math.cos(dir) * g.hx, Math.sin(dir) * g.hy];
+    fill = ctx.createLinearGradient(-x, -y, x, y);
+    fill.addColorStop(0, a); fill.addColorStop(1, b);
+  }
+  return fill;
+}
+
 /* ── Shapes: each draws one item in its own coordinates (centre at 0, 0, unrotated) ── */
 const SHAPES = {
   // Angular polygons: shards, chips and rectangles (4 sides, no irregularity).
@@ -77,15 +135,8 @@ const SHAPES = {
       path[k ? 'lineTo' : 'moveTo'](Math.cos(th) * rad, Math.sin(th) * rad / st);
     }
     path.closePath();
-    let fill = gray(it.tone);
-    const grad = r() < L.gradients, dir = r() * TAU, other = clamp01(it.tone + (r() < .5 ? -1 : 1) * (.3 + .4 * r()));
+    const fill = shade(ctx, L, it, { hx: hs, hy: hs / st, r: hs });
     place(ctx, S, it.x, it.y, it.a, hs, () => {
-      if (grad) {
-        const gx = Math.cos(dir) * hs, gy = Math.sin(dir) * hs / st;
-        fill = ctx.createLinearGradient(-gx, -gy, gx, gy);
-        fill.addColorStop(0, gray(it.tone));
-        fill.addColorStop(1, gray(other));
-      }
       ctx.fillStyle = fill;
       ctx.fill(path);
     });
@@ -117,7 +168,7 @@ const SHAPES = {
       for (let i = 0; i <= N; i++) sp[i ? 'lineTo' : 'moveTo'](cx[i] + nx[i] * hw[i] * v, cy[i] + ny[i] * hw[i] * v);
       streaks.push({ path: sp, width: w * (.04 + .1 * r()), tone: gray(it.tone + (r() - .5) * .5), alpha: L.streaks * (.4 + .6 * r()) });
     }
-    const fill = gray(it.tone);
+    const fill = shade(ctx, L, it, { hx: len / 2, hy: w + Math.abs(bend) / 2, r: len / 2 });
     place(ctx, S, it.x, it.y, it.a, len / 2 + Math.abs(bend) + w, () => {
       ctx.fillStyle = fill;
       ctx.fill(path);
@@ -145,7 +196,8 @@ const SHAPES = {
       sat.moveTo(x + sr, y);
       sat.ellipse(x, y, sr, sr * (.75 + .25 * r()), r() * Math.PI, 0, TAU);
     }
-    const fill = gray(it.tone), satFill = gray(it.tone + L.satContrast * (.6 + .4 * r()));
+    const satFill = gray(it.tone + L.satContrast * (.6 + .4 * r()));
+    const fill = shade(ctx, L, it, { hx: rx, hy: ry, r: rx });
     place(ctx, S, it.x, it.y, it.a, rx * 1.2, () => {
       ctx.fillStyle = fill;
       ctx.fill(path);
@@ -172,7 +224,7 @@ const SHAPES = {
       path.moveTo(x + dr, y);
       path.arc(x, y, dr, 0, TAU);
     }
-    const fill = gray(it.tone);
+    const fill = shade(ctx, L, it, { hx: R, hy: R, r: R });
     place(ctx, S, it.x, it.y, it.a, reach + sp, () => { ctx.fillStyle = fill; ctx.fill(path); });
   },
 
@@ -180,7 +232,7 @@ const SHAPES = {
   lines(ctx, S, L, it, r) {
     const n = Math.max(1, Math.round(L.lines)), sp = Math.max(1, L.lineGap * S), lw = Math.max(.5, sp * L.lineFill);
     const path = new Path2D();
-    let rad;
+    let rad, geo;
     if (L.lineMode === 'arc') {
       const R0 = it.size / 2, span = L.arcSpan * Math.PI / 180;
       for (let k = 0; k < n; k++) {
@@ -191,6 +243,7 @@ const SHAPES = {
         path.arc(0, 0, rk, s0, s1);
       }
       rad = R0 + n * sp / 2 + lw;
+      geo = { r: rad, arc: { s0: -span / 2, span, rIn: Math.max(0, R0 - n * sp / 2 - lw / 2), rOut: rad } };
     } else {
       const len = it.size;
       for (let k = 0; k < n; k++) {
@@ -199,8 +252,9 @@ const SHAPES = {
         path.lineTo(len / 2 - L.ragged * r() * len * .45, y);
       }
       rad = Math.hypot(len / 2, n * sp / 2) + lw;
+      geo = { hx: len / 2, hy: n * sp / 2 + lw / 2, r: rad };
     }
-    const stroke = gray(it.tone);
+    const stroke = shade(ctx, L, it, geo);
     place(ctx, S, it.x, it.y, it.a, rad, () => {
       ctx.lineWidth = lw;
       ctx.lineCap = L.roundCaps ? 'round' : 'butt';

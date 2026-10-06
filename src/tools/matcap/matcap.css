@@ -174,38 +174,6 @@
   border-color: var(--ring)
 }
 
-/* ── Presets ── */
-.mc-presets {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
-  gap: 6px
-}
-
-.mc-preset {
-  aspect-ratio: 1;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: var(--panel-2);
-  cursor: pointer;
-  transition: background .15s, border-color .15s
-}
-
-.mc-preset:hover {
-  background: var(--field)
-}
-
-.mc-preset[aria-pressed="true"] {
-  border-color: var(--text-dim);
-  background: var(--field)
-}
-
-.mc-preset canvas {
-  display: block;
-  width: 100%;
-  height: 100%
-}
-
 /* ── Settings ── */
 .mc-settings {
   gap: 4px;

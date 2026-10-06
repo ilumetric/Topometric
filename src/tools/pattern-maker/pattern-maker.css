@@ -51,45 +51,6 @@
   text-transform: uppercase
 }
 
-/* ── Presets ── */
-.pm-presets {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px
-}
-
-.pm-preset {
-  display: grid;
-  gap: 4px;
-  padding: 4px 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: var(--panel-2);
-  color: var(--muted);
-  font-size: 11px;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s
-}
-
-.pm-preset:hover {
-  background: var(--field);
-  color: var(--text)
-}
-
-.pm-preset[aria-pressed="true"] {
-  border-color: var(--text-dim);
-  background: var(--field);
-  color: var(--text)
-}
-
-.pm-preset canvas {
-  display: block;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 8px;
-  background: #0e0e0e
-}
-
 /* ── Seed ── */
 .pm-seed {
   grid-template-columns: 96px minmax(0, 1fr) auto
@@ -119,7 +80,8 @@
 /* ── Layer list ── */
 .pm-list {
   display: grid;
-  gap: 4px
+  gap: 4px;
+  user-select: none
 }
 
 .pm-layer {
@@ -135,6 +97,46 @@
 
 .pm-layer:hover {
   background: var(--field)
+}
+
+/* ── Drag to reorder ── */
+.pm-grip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 28px;
+  color: var(--muted);
+  opacity: .5;
+  cursor: grab;
+  touch-action: none
+}
+
+.pm-layer:hover .pm-grip {
+  opacity: 1
+}
+
+.pm-grip .icon {
+  width: 14px;
+  height: 14px
+}
+
+.pm-list.is-sorting .pm-layer {
+  transition: transform .15s
+}
+
+.pm-list.is-sorting,
+.pm-list.is-sorting * {
+  cursor: grabbing !important
+}
+
+.pm-layer.is-dragging {
+  position: relative;
+  z-index: 1;
+  border-color: var(--text-dim);
+  background: var(--field);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  transition: none !important
 }
 
 .pm-layer.is-sel {

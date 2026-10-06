@@ -8,6 +8,7 @@ import { encodePNG, encodeTGA } from '../../core/codecs.js';
 import { decodeImage, IMAGE_ACCEPT, isImageFile } from '../../core/image.js';
 import { slider, segmented, toggle } from '../../core/controls.js';
 import { receive } from '../../core/handoff.js';
+import { presetPicker, mergeKnown } from '../../core/presets.js';
 import { createKuwahara } from './kuwahara.js';
 import { createViewer } from '../../core/image-viewer.js';
 
@@ -15,6 +16,14 @@ const STORE_KEY = 'topometric-kuwahator-v1';
 const SAMPLE_SIZE = 1024;
 const DEFAULTS = { radius: 6, smoothness: .35, sharpness: .5, anisotropy: 1 };
 const CH = ['R', 'G', 'B', 'A'];
+// Built-in presets for Color mode; Per channel settings come back to the defaults.
+const PRESETS = [
+  ['Default', DEFAULTS],
+  ['Fine', { radius: 3, smoothness: .25, sharpness: .65, anisotropy: 1 }],
+  ['Painterly', { radius: 12, smoothness: .5, sharpness: .4, anisotropy: 1 }],
+  ['Blocky', { radius: 8, smoothness: .08, sharpness: .9, anisotropy: .2 }],
+  ['Watercolor', { radius: 18, smoothness: .85, sharpness: .2, anisotropy: .8 }],
+];
 
 const TEMPLATE = `
   <header class="page-header">
@@ -56,6 +65,7 @@ const TEMPLATE = `
         <p class="vw-hint">Scroll to zoom, drag to pan, double-click for 1:1. Drop an image anywhere on the view.</p>
       </div>
       <div class="vw-panel">
+        <div class="vw-card" data-ref="presets"></div>
         <div class="vw-card" data-ref="settings"></div>
         <div class="vw-card" data-ref="export"></div>
       </div>
@@ -216,7 +226,8 @@ export function mount(root, { showToast }) {
   /* ── Settings ── */
   const ctls = [];
   const add = c => { ctls.push(c); return c.el; };
-  const changed = () => { run(); save(); };
+  let presets = null;                     // the preset card, made below
+  const changed = () => { run(); save(); presets?.sync(); };
   const bind = key => ({ get: () => cur()[key], set: v => { cur()[key] = v; }, def: DEFAULTS[key], onInput: changed });
   const head = el('div', 'vw-head');
   head.textContent = 'Filter';
@@ -283,6 +294,30 @@ export function mount(root, { showToast }) {
   });
   seamCtl.el.title = 'Filter across the edges, so a tileable texture stays tileable';
   r.settings.append(head, modeCtl.el, chanRow, onCtl.el, sliders, seamCtl.el, tip);
+
+  /* ── Presets (core/presets.js): the filter settings of both modes, not the image ── */
+  const chanDefaults = { on: true, ...DEFAULTS };
+  presets = presetPicker({
+    tool: 'kuwahator',
+    builtins: PRESETS.map(([name, q]) => ({ name, params: { mode: 'color', p: { ...DEFAULTS, ...q }, pc: CH.map(() => ({ ...chanDefaults })) } })),
+    get: () => ({ mode: out.mode, p, pc }),
+    normalize: q => ({
+      mode: q.mode === 'channels' ? 'channels' : 'color',
+      p: mergeKnown(DEFAULTS, q.p),
+      pc: CH.map((_, i) => mergeKnown(chanDefaults, q.pc?.[i])),
+    }),
+    apply(q) {
+      out.mode = q.mode;
+      Object.assign(p, q.p);
+      pc.forEach((c, i) => Object.assign(c, q.pc[i]));
+      modeCtl.sync();
+      setChannel(out.mode === 'color' ? -1 : edit);
+      syncSettings();
+      changed();
+    },
+    showToast,
+  });
+  r.presets.append(presets.el);
 
   /* ── Export ── */
   const nameLabel = el('label', 'vw-name');

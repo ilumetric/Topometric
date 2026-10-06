@@ -70,13 +70,22 @@ Makes an ordinary texture or photo tile seamlessly — without the visible seams
 Generates stylized grayscale patterns that always tile — the abstract shape mixes used as masks and breakup for hand-painted and stylized materials.
 
 - Build the pattern from layers: Shards (angular polygons, chips, rectangles), Strokes (brush strokes and bars with bend, taper, round ends, wobble and bristle streaks), Circles (with spots inside), Halftone (dot patches that fade towards a rough edge) and Lines (straight hatching or concentric arcs).
-- Every layer has its own count, spread (random, grid, columns, rows), size range and bias, angle and jitter, tone range, opacity and blend mode (normal, lighten, darken, overlay), and its own seed. Hide, reorder, duplicate or delete layers.
+- Every layer has its own count, spread (random, grid, columns, rows), size range and bias, angle and jitter, tone range, opacity and blend mode (normal, lighten, darken, overlay), and its own seed.
+- Gradient fills laid out by each shape: along or across strokes and bars, radial or from an off-centre highlight on circles, along the lines and arcs of a bundle (arcs fade around the curve), linear or radial on shards and halftone patches. Choose the share of shapes that get one and how much lighter or darker the end goes. Hide, duplicate or delete layers, and drag them to reorder (or Alt+↑ / Alt+↓).
 - Four presets to start from: Shards, Bars, Bubbles and Brush. One seed reshuffles the whole pattern (R).
 - Levels, grain and invert for the final mask. Undo with Ctrl+Z.
 - Sizes are a share of the texture, so the pattern looks the same at 512 and at 4096 px. Shapes that cross an edge continue on the opposite side, so the texture is seamless by construction; the tiled viewer shows it repeated.
 - Save a grayscale TGA (RLE) or PNG at 512–4096 px, or open it in Kuwahator with Seamless on.
 
 More tools are on the way.
+
+## Presets
+
+MatCap Generator, Kuwahator, Tile Maker and Pattern Maker share one preset system:
+
+- Each tool's built-in presets and your own sit in the same list. **Save** stores the current settings under a name; saving under an existing name updates that preset. Double-click a saved preset to rename it.
+- A preset holds only settings, never images, so it's a few kilobytes.
+- Saved presets live in your browser. Download one preset, or all of them at once, as a `.json` file to keep a copy or share it. **Import** (or drop a file on the list) adds them back. A file knows which tool it's for, so importing it from any tool's page adds it to the right list.
 
 ## Privacy
 
@@ -121,6 +130,7 @@ src/
   core/
     dom.js, toast.js        small helpers
     controls.js             slider, color, segmented and switch controls
+    presets.js              preset card shared by the tools: built-in and saved presets, JSON import/export
     color-picker.js         color wheel + HSL strips popover used by every color field
     codecs.js               TGA read/write, PNG write
     three/
@@ -161,7 +171,8 @@ Plain HTML, CSS and JavaScript modules, with no framework, bundler or package de
 2. Put the styles in `src/tools/<id>/<id>.css`. Prefix class names, use the tokens from `base.css`, and build settings from `core/controls.js`.
 3. Add an entry to `src/tools/registry.js`. For a new icon, add a `<symbol id="i-…">` to the sprite in `index.html`.
 4. Move per-pixel work into a module worker, as `channel-packer/worker.js` does.
-5. For 3D, reuse `core/three/viewer.js` and `core/three/load-model.js`. A three.js addon that isn't vendored yet goes into `src/vendor/three/addons/` (see the README there). If you change the import map in `index.html`, update its `sha256` hash in the Content Security Policy.
+5. For presets, add a card made by `presetPicker` from `core/presets.js`: give it the built-in presets, a getter for the current settings, `normalize` (merge with defaults, usually `mergeKnown`) and `apply`, and call `sync()` after every change.
+6. For 3D, reuse `core/three/viewer.js` and `core/three/load-model.js`. A three.js addon that isn't vendored yet goes into `src/vendor/three/addons/` (see the README there). If you change the import map in `index.html`, update its `sha256` hash in the Content Security Policy.
 
 ## License
 

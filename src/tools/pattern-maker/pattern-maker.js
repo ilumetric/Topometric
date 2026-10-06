@@ -6,13 +6,22 @@ import { el, icon, downloadBlob, isTyping } from '../../core/dom.js';
 import { slider, segmented, toggle } from '../../core/controls.js';
 import { createViewer } from '../../core/image-viewer.js';
 import { sendTo } from '../../core/handoff.js';
-import { TYPES, COMMON, TYPE_DEFAULTS, newLayer } from './pattern.js';
+import { presetPicker, mergeKnown } from '../../core/presets.js';
+import { TYPES, COMMON, TYPE_DEFAULTS, GRAD_MODES, newLayer } from './pattern.js';
 import { PRESETS, GLOBAL, fromPreset } from './presets.js';
 
 const STORE_KEY = 'topometric-pattern-maker-v1';
 const SIZES = [512, 1024, 2048, 4096];
-const THUMB = 144;
+const THUMB = 128;
 const MAX_COUNT = { shards: 600, strokes: 600, circles: 600, halftone: 60, lines: 60 };
+// Gradient fills: [button text, tooltip]
+const GRAD_LABELS = {
+  along: ['Along', 'From one end of the shape to the other'],
+  across: ['Across', 'From one side of the shape to the other'],
+  linear: ['Linear', 'Straight, in a random direction on each shape'],
+  radial: ['Radial', 'From the middle of the shape out to its edge'],
+  spot: ['Spot', 'From an off-centre highlight, the same side on every shape'],
+};
 const DESCRIBE = {
   shards: 'Angular polygons: shards, chips and, with 4 sides and no irregularity, rectangles.',
   strokes: 'Brush strokes with bend, taper and round ends. With no bend, Columns and an angle of 90° they become bars.',
@@ -49,6 +58,7 @@ const TEMPLATE = `
         <p class="vw-hint">Scroll to zoom, drag to pan, double-click for 1:1. The middle of the fitted view is where four tiles meet.</p>
       </div>
       <div class="vw-panel">
+        <div class="vw-card" data-ref="presets"></div>
         <div class="vw-card" data-ref="pattern"></div>
         <div class="vw-card" data-ref="layers"></div>
         <div class="vw-card pm-compact" data-ref="layer"></div>
@@ -84,7 +94,6 @@ export function mount(root, { showToast }) {
   let layers = start.layers.map(L => ({ ...COMMON, ...TYPE_DEFAULTS[L.type], ...L }));
   let sel = Math.min(saved?.sel ?? layers.length - 1, layers.length - 1);
   const out = { format: 'tga', ...saved?.out };
-  let preset = saved ? -1 : 0;
   let fileName = 'T_Pattern_' + (saved ? 'Custom' : PRESETS[0].name);
   let visible = false, saveTimer = 0;
   const cur = () => layers[sel];
@@ -112,7 +121,6 @@ export function mount(root, { showToast }) {
     Object.assign(g, s.g);
     layers = s.layers;
     sel = s.sel;
-    preset = -1;
     refresh();
   }
 
@@ -233,37 +241,41 @@ export function mount(root, { showToast }) {
   const deg = v => Math.round(v) + '°';
   const num = v => (+v).toFixed(2);
   const int = v => String(Math.round(v));
-  function changed() { preset = -1; syncPresets(); run(); save(); }
+  function changed() { presets.sync(); run(); save(); }
 
-  /* ── Pattern: presets, seed, background and levels ── */
-  const presetRow = el('div', 'pm-presets');
-  presetRow.setAttribute('role', 'group');
-  presetRow.setAttribute('aria-label', 'Presets');
-  const thumbs = PRESETS.map((pr, i) => {
-    const b = el('button', 'pm-preset');
-    b.type = 'button';
-    b.title = pr.name;
-    const c = el('canvas');
-    c.width = c.height = THUMB;
-    const name = el('span');
-    name.textContent = pr.name;
-    b.append(c, name);
-    b.addEventListener('click', () => {
-      const p = fromPreset(pr);
-      Object.assign(g, p.g, { size: g.size });
-      layers = p.layers;
+  /* ── Presets: the built-in patterns and the user's own (core/presets.js) ── */
+  // A preset is the pattern without the export size.
+  const params = () => ({ g: { ...g, size: undefined }, layers });
+  const toParams = ({ g: pg, layers: pl }) => ({ g: { ...pg, size: undefined }, layers: pl });
+  const presets = presetPicker({
+    tool: 'pattern-maker',
+    builtins: PRESETS.map(pr => ({ name: pr.name, params: toParams(fromPreset(pr)) })),
+    get: () => JSON.parse(JSON.stringify(params())),
+    normalize: pp => JSON.parse(JSON.stringify({
+      g: { ...mergeKnown(GLOBAL, pp.g), size: undefined },
+      layers: (Array.isArray(pp.layers) ? pp.layers : [])
+        .filter(L => TYPES[L?.type])
+        .map(L => mergeKnown({ ...COMMON, ...TYPE_DEFAULTS[L.type], type: L.type }, L)),
+    })),
+    apply(pp, { name }) {
+      Object.assign(g, pp.g, { size: g.size });
+      layers = pp.layers;
       sel = layers.length - 1;
-      preset = i;
-      fileName = 'T_Pattern_' + pr.name;
+      fileName = 'T_Pattern_' + name.replace(/[^\w-]+/g, '');
       nameInput.value = fileName;
       refresh();
       commit();
-    });
-    presetRow.append(b);
-    return { b, c };
+    },
+    thumb: (pp, canvas) => request({ type: 'thumbs', size: THUMB, items: [{ g: { ...GLOBAL, ...pp.g }, layers: pp.layers }] }).then(({ images }) => {
+      canvas.width = canvas.height = THUMB;
+      canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(images[0].buffer), THUMB, THUMB), 0, 0);
+    }),
+    tile: 64,
+    showToast,
   });
-  function syncPresets() { thumbs.forEach(({ b }, i) => b.setAttribute('aria-pressed', i === preset)); }
+  r.presets.append(presets.el);
 
+  /* ── Pattern: seed, background and levels ── */
   const seedRow = el('div', 'ctl pm-seed');
   const seedLabel = el('span', 'ctl-label');
   seedLabel.textContent = 'Seed';
@@ -288,7 +300,6 @@ export function mount(root, { showToast }) {
   undoBtn.addEventListener('click', () => stepHistory(-1));
   r.pattern.append(
     head('Pattern', undoBtn).el,
-    presetRow,
     seedRow,
     gadd(slider({ label: 'Background', min: 0, max: 1, step: .01, format: pct, ...gbind('bg') })),
     sub('Levels'),
@@ -327,21 +338,29 @@ export function mount(root, { showToast }) {
       row.classList.toggle('is-off', !L.on);
       const eye = button('pm-ibtn', '', L.on ? 'Hide layer' : 'Show layer', L.on ? 'eye' : 'eye-off');
       eye.addEventListener('click', () => { L.on = !L.on; renderList(); changed(); commit(); });
+      const grip = el('span', 'pm-grip');
+      grip.append(icon('grip'));
+      grip.title = 'Drag to reorder';
       const name = el('button', 'pm-name');
       name.type = 'button';
       name.setAttribute('role', 'option');
       name.setAttribute('aria-selected', i === sel);
+      name.title = 'Drag to reorder. Alt+↑ / Alt+↓ move the layer';
       const t = el('span'), s = el('small');
       t.textContent = TYPES[L.type];
       s.textContent = summary(L);
       name.append(t, s);
-      name.addEventListener('click', () => { sel = i; renderList(); buildLayer(); save(); });
-      const up = button('pm-ibtn', '', 'Move up', 'chevron-up');
-      up.disabled = i === layers.length - 1;
-      up.addEventListener('click', () => move(i, 1));
-      const down = button('pm-ibtn', '', 'Move down', 'chevron-down');
-      down.disabled = i === 0;
-      down.addEventListener('click', () => move(i, -1));
+      name.addEventListener('click', () => {
+        if (dragged) return;
+        sel = i; renderList(); buildLayer(); save();
+      });
+      name.addEventListener('keydown', e => {
+        const d = e.altKey && { ArrowUp: 1, ArrowDown: -1 }[e.key];
+        if (!d) return;
+        e.preventDefault();
+        moveLayer(i, i + d);
+        list.children[layers.length - 1 - sel]?.querySelector('.pm-name')?.focus();
+      });
       const dup = button('pm-ibtn', '', 'Duplicate with a new seed', 'copy');
       dup.addEventListener('click', () => {
         layers.splice(i + 1, 0, { ...L, seed: randomSeed() });
@@ -355,17 +374,66 @@ export function mount(root, { showToast }) {
         refresh(); changed(); commit();
         showToast(TYPES[L.type] + ' layer deleted', { action: 'Undo', onAction: () => stepHistory(-1) });
       });
-      row.append(eye, name, up, down, dup, del);
+      row.addEventListener('pointerdown', e => startDrag(e, row, i));
+      row.append(grip, eye, name, dup, del);
       list.append(row);
     }
     if (!layers.length) list.append(tip('No layers yet — add one below, or pick a preset.'));
   }
-  function move(i, d) {
-    const j = i + d;
-    if (j < 0 || j >= layers.length) return;
-    [layers[i], layers[j]] = [layers[j], layers[i]];
-    if (sel === i) sel = j; else if (sel === j) sel = i;
+  // Moves layer `from` to index `to`; the selection follows the layer it was on.
+  function moveLayer(from, to) {
+    to = Math.max(0, Math.min(layers.length - 1, to));
+    if (from === to) return;
+    const selected = layers[sel];
+    layers.splice(to, 0, ...layers.splice(from, 1));
+    sel = layers.indexOf(selected);
     refresh(); changed(); commit();
+  }
+
+  /* ── Drag to reorder: the row follows the pointer, the others make room ──
+     The list shows the top layer first, so a row's slot is layers.length - 1 - index. */
+  let dragged = false;
+  function startDrag(e, row, index) {
+    if (e.button !== 0 || e.target.closest('.pm-ibtn')) return;
+    // on touch screens only the grip drags, so the list still scrolls the page
+    if (e.pointerType !== 'mouse' && !e.target.closest('.pm-grip')) return;
+    const rows = [...list.children], from = rows.indexOf(row), y0 = e.clientY;
+    const pitch = row.offsetHeight + parseFloat(getComputedStyle(list).rowGap || 0);
+    let on = false, slot = from;
+    dragged = false;
+    // listen on the window, not with pointer capture: capture would retarget the click
+    // of a plain press away from the name button
+    const move = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      const dy = ev.clientY - y0;
+      if (!on && Math.abs(dy) < 4) return;
+      if (!on) { on = dragged = true; row.classList.add('is-dragging'); list.classList.add('is-sorting'); }
+      ev.preventDefault();
+      const top = -from * pitch, bottom = (rows.length - 1 - from) * pitch;
+      const y = Math.max(top, Math.min(bottom, dy));
+      row.style.transform = `translateY(${y}px)`;
+      slot = Math.max(0, Math.min(rows.length - 1, from + Math.round(y / pitch)));
+      rows.forEach((r, k) => {
+        if (r === row) return;
+        const shift = k > from && k <= slot ? -pitch : k < from && k >= slot ? pitch : 0;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
+      });
+    };
+    const end = ev => {
+      if (ev.pointerId !== e.pointerId) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+      if (!on) return;
+      rows.forEach(r => { r.style.transform = ''; });
+      row.classList.remove('is-dragging');
+      list.classList.remove('is-sorting');
+      if (ev.type === 'pointerup' && slot !== from) moveLayer(index, layers.length - 1 - slot);
+      setTimeout(() => { dragged = false; });     // swallow the click that ends the drag
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }
 
   /* ── Selected layer's settings ── */
@@ -400,7 +468,6 @@ export function mount(root, { showToast }) {
       s('Sides', 'sides', 3, 8, 1, int),
       s('Irregular', 'irregular', 0, 1, .01, pct),
       s('Stretch', 'stretch', 1, 8, .05, num),
-      s('Gradients', 'gradients', 0, 1, .01, pct),
     );
     else if (L.type === 'strokes') shape.push(
       s('Stretch', 'stretch', 1, 12, .05, num),
@@ -458,6 +525,17 @@ export function mount(root, { showToast }) {
       add(toggle({ label: 'Large first', ...bind('largeFirst') })),
       sub('Shape'),
       ...shape,
+      sub('Gradient'),
+      add(segmented({
+        label: 'Fill',
+        options: GRAD_MODES[L.type].map(m => [m, ...GRAD_LABELS[m]]),
+        get: () => GRAD_MODES[L.type].includes(cur().gradMode) ? cur().gradMode : GRAD_MODES[L.type][0],
+        set: v => { cur().gradMode = v; },
+        onInput: () => changed(), onCommit: commit,
+      })),
+      s('Shapes', 'gradients', 0, 1, .01, pct),
+      s('End tone', 'gradAmount', -1, 1, .01, v => (v > 0 ? '+' : '') + Math.round(v * 100) + '%'),
+      add(toggle({ label: 'Both ways', ...bind('gradBoth') })),
       sub('Rotation'),
       s('Angle', 'angle', 0, 180, 1, deg),
       s('Jitter', 'jitter', 0, 1, .01, pct),
@@ -473,7 +551,7 @@ export function mount(root, { showToast }) {
         ],
         ...bind('blend'),
       })),
-      tip('Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Double-click a label to reset it.'),
+      tip('Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Gradient: Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets; Both ways lets half of them go the other way. Double-click a label to reset it.'),
     );
     syncLayerVisibility();
   }
@@ -558,7 +636,7 @@ export function mount(root, { showToast }) {
     seedInput.value = g.seed;
     gctls.forEach(c => c.sync());
     sizeCtl.sync();
-    syncPresets();
+    presets.sync();
     renderList();
     buildLayer();
     syncInfo();
@@ -568,9 +646,6 @@ export function mount(root, { showToast }) {
 
   /* ── Start ── */
   refresh();
-  request({ type: 'thumbs', size: THUMB, items: PRESETS.map(fromPreset) }).then(({ images }) => {
-    images.forEach((data, i) => thumbs[i].c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data.buffer), THUMB, THUMB), 0, 0));
-  }).catch(err => console.error(err));
   new ResizeObserver(() => { viewer?.resize(); requestDraw(); }).observe(r.view);
 
   return {
