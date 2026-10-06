@@ -1,0 +1,262 @@
+/* Pattern Maker — loaded together with the tool. */
+
+#page-pattern-maker {
+  --content-w: 1320px
+}
+
+#page-pattern-maker .vw-card[hidden],
+#page-pattern-maker .ctl[hidden] {
+  display: none
+}
+
+/* Drawing time is unknown up front: a light sweeps along the top edge */
+.vw-progress.pm-busy {
+  --p: 1;
+  background: linear-gradient(90deg, transparent, var(--text-dim), transparent) 0 0 / 40% 100% no-repeat;
+  animation: pm-sweep 1s linear infinite
+}
+
+@keyframes pm-sweep {
+  from {
+    background-position: -40% 0
+  }
+
+  to {
+    background-position: 140% 0
+  }
+}
+
+.pm-head-tools {
+  display: flex;
+  gap: 2px;
+  align-items: center
+}
+
+.pm-head-tools .btn-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--muted)
+}
+
+.pm-head-tools .btn-icon:hover:not(:disabled) {
+  color: var(--text)
+}
+
+.pm-sub {
+  margin-top: 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase
+}
+
+/* ── Presets ── */
+.pm-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px
+}
+
+.pm-preset {
+  display: grid;
+  gap: 4px;
+  padding: 4px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s
+}
+
+.pm-preset:hover {
+  background: var(--field);
+  color: var(--text)
+}
+
+.pm-preset[aria-pressed="true"] {
+  border-color: var(--text-dim);
+  background: var(--field);
+  color: var(--text)
+}
+
+.pm-preset canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: #0e0e0e
+}
+
+/* ── Seed ── */
+.pm-seed {
+  grid-template-columns: 96px minmax(0, 1fr) auto
+}
+
+.pm-num {
+  width: 100%;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  outline: 0;
+  background: var(--field);
+  color: var(--text);
+  font: 13px var(--mono)
+}
+
+.pm-num:focus {
+  border-color: var(--ring)
+}
+
+.pm-seed .pm-dice {
+  width: 32px;
+  height: 32px
+}
+
+/* ── Layer list ── */
+.pm-list {
+  display: grid;
+  gap: 4px
+}
+
+.pm-layer {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--panel-2);
+  transition: background .15s, border-color .15s
+}
+
+.pm-layer:hover {
+  background: var(--field)
+}
+
+.pm-layer.is-sel {
+  border-color: var(--text-dim);
+  background: var(--field)
+}
+
+.pm-layer.is-off .pm-name {
+  opacity: .45
+}
+
+.pm-name {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer
+}
+
+.pm-name small {
+  overflow: hidden;
+  color: var(--muted);
+  font: 11px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.pm-ibtn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer
+}
+
+.pm-ibtn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.pm-ibtn:disabled {
+  opacity: .25;
+  cursor: default
+}
+
+.pm-ibtn .icon {
+  width: 15px;
+  height: 15px
+}
+
+.pm-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px
+}
+
+.pm-add-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--stroke-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background .15s, color .15s
+}
+
+.pm-add-btn:hover {
+  background: var(--hover);
+  color: var(--text)
+}
+
+.pm-add-btn .icon {
+  width: 14px;
+  height: 14px
+}
+
+/* ── Export ── */
+.pm-size {
+  grid-template-columns: 40px minmax(0, 1fr)
+}
+
+.pm-size .seg button {
+  min-width: 0;
+  padding: 0 4px;
+  font: 500 11px var(--mono)
+}
+
+.pm-send .icon {
+  width: 16px;
+  height: 16px
+}
+
+/* four options in one row in the narrow panel: the label goes above them */
+.pm-compact .ctl-seg {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px
+}
+
+.pm-compact .seg {
+  flex-wrap: nowrap
+}
+
+.pm-compact .seg button {
+  min-width: 0;
+  padding: 0 6px
+}

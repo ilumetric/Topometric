@@ -65,6 +65,17 @@ Makes an ordinary texture or photo tile seamlessly — without the visible seams
 - Open the result in Kuwahator with one click; it arrives with Seamless on, so it stays tileable.
 - Load PNG, JPG, TGA, WebP and BMP; save TGA (RLE) or PNG. Alpha is kept when the source has it.
 
+### Pattern Maker
+
+Generates stylized grayscale patterns that always tile — the abstract shape mixes used as masks and breakup for hand-painted and stylized materials.
+
+- Build the pattern from layers: Shards (angular polygons, chips, rectangles), Strokes (brush strokes and bars with bend, taper, round ends, wobble and bristle streaks), Circles (with spots inside), Halftone (dot patches that fade towards a rough edge) and Lines (straight hatching or concentric arcs).
+- Every layer has its own count, spread (random, grid, columns, rows), size range and bias, angle and jitter, tone range, opacity and blend mode (normal, lighten, darken, overlay), and its own seed. Hide, reorder, duplicate or delete layers.
+- Four presets to start from: Shards, Bars, Bubbles and Brush. One seed reshuffles the whole pattern (R).
+- Levels, grain and invert for the final mask. Undo with Ctrl+Z.
+- Sizes are a share of the texture, so the pattern looks the same at 512 and at 4096 px. Shapes that cross an edge continue on the opposite side, so the texture is seamless by construction; the tiled viewer shows it repeated.
+- Save a grayscale TGA (RLE) or PNG at 512–4096 px, or open it in Kuwahator with Seamless on.
+
 More tools are on the way.
 
 ## Privacy
@@ -130,6 +141,12 @@ src/
       renderer.js           matcap shader (three.js RawShaderMaterial), export readback
       meshes.js             preview shapes
       presets.js            defaults and presets
+    pattern-maker/
+      pattern-maker.js      UI: presets, layer list, layer settings, undo, export
+      pattern-maker.css
+      pattern.js            layer types and the tileable renderer (2D canvas)
+      presets.js            presets
+      worker.js             drawing on an OffscreenCanvas, levels, encoding (Web Worker)
 scripts/
   serve.mjs                 local dev server
   ply-to-glb.mjs            converts ASCII PLY to a compact GLB

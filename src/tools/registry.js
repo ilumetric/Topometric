@@ -39,4 +39,12 @@ export const TOOLS = [
     module: here('./tile-maker/tile-maker.js'),
     css: here('./tile-maker/tile-maker.css'),
   },
+  {
+    id: 'pattern-maker',
+    title: 'Pattern Maker',
+    short: 'Pattern',
+    icon: 'shapes',
+    module: here('./pattern-maker/pattern-maker.js'),
+    css: here('./pattern-maker/pattern-maker.css'),
+  },
 ];
