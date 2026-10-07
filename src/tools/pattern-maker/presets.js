@@ -2,7 +2,7 @@
 // Layers only list what differs from their type's defaults (see newLayer in pattern.js).
 import { newLayer } from './pattern.js';
 
-export const GLOBAL = { seed: 1, size: 2048, bg: .42, black: 0, white: 1, invert: false, grain: 0 };
+export const GLOBAL = { seed: 1, size: 2048, bg: .42, autoLevels: false, black: 0, white: 1, invert: false, grain: 0 };
 
 export const PRESETS = [
   {

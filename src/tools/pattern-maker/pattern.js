@@ -456,6 +456,8 @@ function drawWood(ctx, S, L, seed) {
 }
 
 // Draws the pattern and returns its RGBA pixels with levels, invert and grain applied.
+// Auto levels first stretches the drawn pattern so its darkest pixel becomes black and its
+// brightest white; the Black and White points then work on that full range.
 export function render(ctx, S, g, layers) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
@@ -468,9 +470,19 @@ export function render(ctx, S, g, layers) {
   ctx.globalCompositeOperation = 'source-over';
 
   const data = ctx.getImageData(0, 0, S, S).data;
+  let min = 0, max = 255;
+  if (g.autoLevels) {
+    const seen = new Uint8Array(256);
+    for (let i = 0; i < data.length; i += 4) seen[data[i]] = 1;
+    min = seen.indexOf(1); max = seen.lastIndexOf(1);
+    if (max <= min) { min = 0; max = 255; }                   // a flat image has nothing to stretch
+  }
   const lo = Math.min(g.black, g.white - .004), k = 1 / Math.max(.004, g.white - lo);
   const lut = new Float32Array(256);
-  for (let v = 0; v < 256; v++) { const t = clamp01((v / 255 - lo) * k); lut[v] = (g.invert ? 1 - t : t) * 255; }
+  for (let v = 0; v < 256; v++) {
+    const t = clamp01(((v - min) / (max - min) - lo) * k);
+    lut[v] = (g.invert ? 1 - t : t) * 255;
+  }
   // per-pixel noise is independent from pixel to pixel, so it tiles as it is
   const grain = g.grain * 255, rnd = mulberry32(mix(g.seed >>> 0, 0x5EED));
   for (let i = 0; i < data.length; i += 4) {

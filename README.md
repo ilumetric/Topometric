@@ -74,7 +74,7 @@ Generates stylized grayscale patterns that always tile — the abstract shape mi
 - Every layer has its own count, spread (random, grid, columns, rows), size range and bias, angle and jitter, tone range, opacity and blend mode (normal, lighten, darken, overlay), and its own seed.
 - Gradient fills laid out by each shape: along or across strokes and bars, radial or from an off-centre highlight on circles, along the lines and arcs of a bundle (arcs fade around the curve), linear or radial on shards and halftone patches. Choose the share of shapes that get one, how much lighter or darker the end goes, and whether it starts at the same end of every shape — from a stroke's base to its tapered tip, say for grass — or at a random end. Hide, duplicate or delete layers, and drag them to reorder (or Alt+↑ / Alt+↓).
 - Nine presets to start from: Shards, Bars, Bubbles, Grass, Bricks, Planks, Wood, Wood Broken and Brush. Angles count counterclockwise, 90° points up. One seed reshuffles the whole pattern (R).
-- Levels, grain and invert for the final mask. Undo with Ctrl+Z.
+- Auto levels stretches the pattern to the full 0–1 range (its darkest spot becomes black, its brightest white); levels, grain and invert for the final mask. Undo with Ctrl+Z.
 - Sizes are a share of the texture, so the pattern looks the same at 512 and at 4096 px. Shapes that cross an edge continue on the opposite side, so the texture is seamless by construction; the tiled viewer shows it repeated.
 - Save a grayscale TGA (RLE) or PNG at 512–4096 px, or open it in Kuwahator with Seamless on.
 

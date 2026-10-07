@@ -305,11 +305,12 @@ export function mount(root, { showToast }) {
     seedRow,
     gadd(slider({ label: 'Background', min: 0, max: 1, step: .01, format: pct, ...gbind('bg') })),
     sub('Levels'),
+    gadd(toggle({ label: 'Auto levels', ...gbind('autoLevels') })),
     gadd(slider({ label: 'Black point', min: 0, max: .9, step: .01, format: pct, ...gbind('black') })),
     gadd(slider({ label: 'White point', min: .1, max: 1, step: .01, format: pct, ...gbind('white') })),
     gadd(slider({ label: 'Grain', min: 0, max: .3, step: .005, format: pct1, ...gbind('grain') })),
     gadd(toggle({ label: 'Invert', ...gbind('invert') })),
-    tip('Layers are drawn from the bottom of the list up. Seed reshuffles every layer at once; each layer also has its own.'),
+    tip('Layers are drawn from the bottom of the list up. Seed reshuffles every layer at once; each layer also has its own. Auto levels stretches the pattern so its darkest spot is black and its brightest white; Black and White points work on top of that.'),
   );
 
   /* ── Layer list ── */
