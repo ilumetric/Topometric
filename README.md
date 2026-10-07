@@ -38,7 +38,7 @@ Builds matcaps — the shaded spheres Blender, ZBrush and many engines use as qu
 - Up to four lights, placed by dragging them on the sphere — or over the 3D preview, in the same 2D layout: each one puts its highlight right where you drop it.
 - Material with sky/ground ambient and subsurface-like scatter, specular, reflections (studio, sky or horizon environment, blur, metallic), rim light, a thin edge light and an edge shadow that sets the sphere off the background.
 - Stylize: toon steps, outline, stripes. Adjust: exposure, contrast, saturation, grain.
-- Live 3D preview on a knot, torus, blob, the Stanford Bunny or Blender's Suzanne — or drop your own model (GLB, GLTF, OBJ, FBX, STL).
+- Live 3D preview on a knot, torus, blob or Blender's Suzanne — or drop your own model (GLB, GLTF, OBJ, FBX, STL).
 - Save PNG at 256–2048 px (512 by default). Background: *Extend* (default), which stretches the edge colors outward so texture filtering never picks up a foreign color, a solid color, or transparent. Undo with Ctrl+Z.
 
 ### Kuwahator
@@ -138,7 +138,7 @@ src/
       viewer.js             three.js viewer: orbit camera, fit to object, on-demand rendering
       load-model.js         GLB/GLTF, OBJ, FBX, STL from local files
   vendor/three/             three.js r186 (minified, MIT), mapped as `three` in index.html
-  assets/models/            sample models (Stanford Bunny, Suzanne)
+  assets/models/            sample model (Suzanne)
   styles/base.css           design tokens, shell and control styles
   tools/
     registry.js             the list of tools
@@ -189,7 +189,6 @@ This summary is for convenience only; [LICENSE.md](LICENSE.md) is the binding te
 ## Third-party
 
 - [three.js](https://threejs.org) — MIT license, see `src/vendor/three/LICENSE`.
-- Stanford Bunny — [Stanford 3D Scanning Repository](https://graphics.stanford.edu/data/3Dscanrep/), Stanford University Computer Graphics Laboratory.
 - Suzanne — the monkey head from [Blender](https://www.blender.org), Blender Foundation.
 
 ## Contributing

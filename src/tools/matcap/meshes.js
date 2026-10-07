@@ -3,10 +3,9 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-export const SHAPES = [['knot', 'Knot'], ['torus', 'Torus'], ['blob', 'Blob'], ['bunny', 'Bunny'], ['suzanne', 'Suzanne']];
+export const SHAPES = [['knot', 'Knot'], ['torus', 'Torus'], ['blob', 'Blob'], ['suzanne', 'Suzanne']];
 
 const MODELS = {
-  bunny: new URL('../../assets/models/stanford-bunny.glb', import.meta.url).href,
   suzanne: new URL('../../assets/models/blender-suzanne.glb', import.meta.url).href,
 };
 
