@@ -64,6 +64,13 @@ const TEMPLATE = `
               <select data-ref="h" aria-label="Height"></select>
             </span>
           </div>
+          <div class="pk-space">
+            <span>Values</span>
+            <div class="pk-format" data-ref="space" role="group" aria-label="Values">
+              <button type="button" data-space="srgb" aria-pressed="true" title="Values as they are, for textures imported with sRGB on">sRGB</button>
+              <button type="button" data-space="linear" aria-pressed="false" title="For textures imported with sRGB off (Unreal: sRGB unchecked, Grayscale or Masks): R, G and B are converted from sRGB to linear so they look the same in the engine; alpha is kept">Linear</button>
+            </div>
+          </div>
           <div class="pk-save">
             <label class="pk-name"><input data-ref="name" value="${DEFAULT_NAME}" spellcheck="false" aria-label="File name"><span data-ref="ext">.tga</span></label>
             <div class="pk-format" data-ref="format" role="group" aria-label="File format">
@@ -114,7 +121,7 @@ export function mount(root, { showToast }) {
   const links = [null, null, null, null]; // per output channel: { id, ch } or null
   const fill = [0, 0, 0];                 // value of an unconnected R G B
   const invert = [false, false, false, false];
-  let alphaOn = false, view = 'rgb', format = 'tga';
+  let alphaOn = false, view = 'rgb', format = 'tga', space = 'srgb';
   let current = null;                     // what the output is right now: { job, mixed, stretched } or null
   let out = null;                         // last preview from the worker: { pw, ph, preview }
 
@@ -151,7 +158,7 @@ export function mount(root, { showToast }) {
     return new Promise((resolve, reject) => {
       const seq = ++encodeSeq;
       encodes.set(seq, { resolve, reject });
-      worker.postMessage({ type, seq, job, view, format });
+      worker.postMessage({ type, seq, job, view, format, linear: space === 'linear' });
     });
   }
 
@@ -441,6 +448,14 @@ export function mount(root, { showToast }) {
     r.format.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
   });
 
+  r.space.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    space = b.dataset.space;
+    r.space.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    showMode();
+  });
+
   [r.w, r.h].forEach(sel => sel.replaceChildren(...POW2.map(v => { const o = el('option'); o.value = v; o.textContent = v; return o; })));
   sizeSel.addEventListener('change', () => {
     if (sizeSel.value === 'custom' && sizeMode !== 'custom' && current) {
@@ -463,6 +478,7 @@ export function mount(root, { showToast }) {
     const { job: { W, H, alpha }, stretched, mixed } = current;
     info.textContent = W + ' × ' + H + ', ' +
       (one ? CH[+view] + ' only, grayscale' : alpha ? 'RGBA' : 'RGB, no alpha') +
+      (space === 'linear' && view !== '3' ? ', linear values' : '') +
       (stretched ? '. Input aspect ratios differ — they are stretched.' : mixed ? '. Inputs are resized to this size.' : '.') + ' ' + INFO_TEXT;
   }
   function setView(v) {

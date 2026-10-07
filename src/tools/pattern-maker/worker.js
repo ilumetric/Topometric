@@ -4,10 +4,11 @@
 // Messages in:
 //   { type: 'render', seq, g, layers }     replies { type: 'result', seq, S, data } (RGBA bytes)
 //   { type: 'thumbs', seq, items, size }   small previews of presets; replies { type: 'thumbs', seq, images }
-//   { type: 'encode', seq, format }        the last result as a grayscale TGA or PNG
+//   { type: 'encode', seq, format, linear } the last result as a grayscale TGA or PNG, linear: sRGB → linear values
 //   { type: 'pixels', seq }                the last result as RGBA bytes
 import { render } from './pattern.js';
 import { encodePNG, encodeTGA } from '../../core/codecs.js';
+import { toLinear } from '../../core/colorspace.js';
 
 const canvases = new Map();       // size -> 2D context
 let last = null;                  // { S, data }
@@ -48,6 +49,7 @@ self.onmessage = async ({ data: m }) => {
       case 'encode': {
         const { S, data } = last, px = new Uint8Array(S * S);
         for (let i = 0; i < px.length; i++) px[i] = data[i * 4];
+        if (m.linear) toLinear(px, 1);
         const img = { W: S, H: S, px, ch: 1 };                // grayscale file
         const blob = m.format === 'png' ? await encodePNG(img) : encodeTGA(img);
         self.postMessage({ type: 'encoded', seq: m.seq, blob });

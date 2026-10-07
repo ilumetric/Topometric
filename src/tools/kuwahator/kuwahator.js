@@ -9,6 +9,7 @@ import { decodeImage, IMAGE_ACCEPT, isImageFile } from '../../core/image.js';
 import { slider, segmented, toggle } from '../../core/controls.js';
 import { receive } from '../../core/handoff.js';
 import { presetPicker, mergeKnown } from '../../core/presets.js';
+import { SPACES, toLinear } from '../../core/colorspace.js';
 import { createKuwahara } from './kuwahara.js';
 import { createViewer } from '../../core/image-viewer.js';
 
@@ -88,7 +89,7 @@ export function mount(root, { showToast }) {
   const pc = CH.map((_, i) => ({ on: true, ...DEFAULTS, ...saved.pc?.[i] }));  // Per channel mode
   let edit = 0;                                                             // channel being edited
   const cur = () => out.mode === 'color' ? p : pc[edit];
-  const out = { mode: 'color', format: 'tga', ...saved.out };
+  const out = { mode: 'color', format: 'tga', space: 'srgb', ...saved.out };
   let image = { name: 'Sample', w: SAMPLE_SIZE, h: SAMPLE_SIZE, note: '', data: null };   // data: null = built-in sample
   let fileName = 'T_Sample_Kuwahara';
   let seamless = false;                     // filter across the edges: keeps a tileable texture tileable
@@ -337,12 +338,16 @@ export function mount(root, { showToast }) {
   const info = el('p', 'vw-tip');
   const saveRow = el('div', 'vw-save');
   saveRow.append(nameLabel, formatCtl.el);
-  r.export.append(saveRow, dl, info);
+  const spaceCtl = segmented({
+    label: 'Values', options: SPACES,
+    get: () => out.space, set: v => { out.space = v; }, onInput: () => { syncInfo(); save(); },
+  });
+  r.export.append(spaceCtl.el, saveRow, dl, info);
 
   function syncInfo() {
     ext.textContent = '.' + out.format;
     const alpha = engine ? !engine.opaque : false;
-    info.textContent = `${image.name} · ${image.w} × ${image.h} · saved as ${alpha ? 'RGBA' : 'RGB'}` + (image.note ? ` · ${image.note}` : '') + '.';
+    info.textContent = `${image.name} · ${image.w} × ${image.h} · saved as ${alpha ? 'RGBA' : 'RGB'}` + (out.space === 'linear' ? ', linear values' : '') + (image.note ? ` · ${image.note}` : '') + '.';
     r.chips.querySelector('[data-chan="3"]').disabled = !alpha;
     if (!alpha && viewer?.chan === 3) setChannel(out.mode === 'color' ? -1 : 0);
     syncSettings();
@@ -359,6 +364,7 @@ export function mount(root, { showToast }) {
         px = new Uint8Array(W * H * 3);
         for (let i = 0, o = 0; i < rgba.length; i += 4, o += 3) { px[o] = rgba[i]; px[o + 1] = rgba[i + 1]; px[o + 2] = rgba[i + 2]; }
       }
+      if (out.space === 'linear') toLinear(px === rgba ? (px = rgba.slice()) : px, ch);
       const img = { W, H, px, ch };
       const blob = out.format === 'png' ? await encodePNG(img) : encodeTGA(img);
       const base = (fileName.trim() || 'Kuwahara').replace(/\.(png|tga)$/i, '').replace(/[\\/:*?"<>|]/g, '_');

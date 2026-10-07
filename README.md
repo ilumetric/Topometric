@@ -101,6 +101,8 @@ Packing has to be exact, so Topometric avoids the shortcuts that quietly change 
 - Downscaling averages the exact area each output pixel covers; upscaling is linear.
 - Heavy work runs in a background worker, so the page stays responsive with 4K and 8K maps.
 
+Pattern Maker, Kuwahator and Channel Packer can save **Linear** values. Use it for textures imported with sRGB off — in Unreal, sRGB unchecked with Grayscale or Masks compression. The engine then reads the bytes as linear, so without the conversion mid grays come out lighter and the texture looks washed out; Linear converts sRGB → linear before saving, so it looks the same in the engine as in the tool (alpha is never converted). Keep **sRGB** for color textures and for maps that already hold linear data.
+
 Browsers decode images at 8 bits per channel. 16-bit PNGs are converted, and the tool shows a note when that happens.
 
 Matcaps are shaded on the GPU in linear space with 4 samples per pixel; the sphere edge is antialiased from its exact coverage. The preview, the thumbnails and the saved file come from the same shader, and the file is read back from an 8-bit target without any color conversion.
@@ -132,6 +134,7 @@ src/
     dom.js, toast.js        small helpers
     controls.js             slider, color, segmented and switch controls
     presets.js, presets.css preset card shared by the tools: built-in and saved presets, JSON import/export
+    colorspace.js           sRGB → linear conversion for files saved with Linear values
     color-picker.js         color wheel + HSL strips popover used by every color field
     codecs.js               TGA read/write, PNG write
     three/

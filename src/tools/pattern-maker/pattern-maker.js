@@ -7,6 +7,7 @@ import { slider, segmented, toggle } from '../../core/controls.js';
 import { createViewer } from '../../core/image-viewer.js';
 import { sendTo } from '../../core/handoff.js';
 import { presetPicker, mergeKnown } from '../../core/presets.js';
+import { SPACES } from '../../core/colorspace.js';
 import { TYPES, COMMON, TYPE_DEFAULTS, GRAD_MODES, BRICK_TYPES, newLayer } from './pattern.js';
 import { PRESETS, GLOBAL, fromPreset } from './presets.js';
 
@@ -94,7 +95,7 @@ export function mount(root, { showToast }) {
   const g = { ...GLOBAL, ...start.g };
   let layers = start.layers.map(L => ({ ...COMMON, ...TYPE_DEFAULTS[L.type], ...L }));
   let sel = Math.min(saved?.sel ?? layers.length - 1, layers.length - 1);
-  const out = { format: 'tga', ...saved?.out };
+  const out = { format: 'tga', space: 'srgb', ...saved?.out };
   let fileName = 'T_Pattern_' + (saved ? 'Custom' : PRESETS[0].name);
   let visible = false, saveTimer = 0;
   const cur = () => layers[sel];
@@ -660,18 +661,22 @@ export function mount(root, { showToast }) {
   const info = el('p', 'vw-tip');
   const saveRow = el('div', 'vw-save');
   saveRow.append(nameLabel, formatCtl.el);
-  r.export.append(sizeCtl.el, saveRow, dl, send, info);
+  const spaceCtl = segmented({
+    label: 'Values', options: SPACES,
+    get: () => out.space, set: v => { out.space = v; }, onInput: () => { syncInfo(); save(); },
+  });
+  r.export.append(sizeCtl.el, spaceCtl.el, saveRow, dl, send, info);
 
   function syncInfo() {
     ext.textContent = '.' + out.format;
     dl.disabled = send.disabled = !result;
-    info.textContent = `${g.size} × ${g.size} · grayscale · tiles seamlessly.`;
+    info.textContent = `${g.size} × ${g.size} · grayscale · ` + (out.space === 'linear' ? 'linear values, for import with sRGB off' : 'sRGB') + ' · tiles seamlessly.';
   }
   const baseName = () => (fileName.trim() || 'Pattern').replace(/\.(png|tga)$/i, '').replace(/[\\/:*?"<>|]/g, '_');
   dl.addEventListener('click', async () => {
     if (!result) return;
     dl.disabled = true;
-    try { downloadBlob((await request({ type: 'encode', format: out.format })).blob, baseName() + '.' + out.format); }
+    try { downloadBlob((await request({ type: 'encode', format: out.format, linear: out.space === 'linear' })).blob, baseName() + '.' + out.format); }
     catch (err) { console.error(err); showToast('Could not save the file: ' + err.message); }
     dl.disabled = !result;
   });

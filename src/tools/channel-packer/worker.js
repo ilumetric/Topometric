@@ -5,11 +5,13 @@
 //   { type: 'set', id, w, h, data }        add or replace a texture (RGBA bytes, buffer is transferred)
 //   { type: 'remove', id }
 //   { type: 'compose', seq, job }          pack channels, reply with a small preview
-//   { type: 'encode', seq, job, view, format }  pack (if needed) and encode a file
+//   { type: 'encode', seq, job, view, format, linear }  pack (if needed) and encode a file;
+//                                         linear: sRGB → linear values (alpha stays as is)
 //   { type: 'pixels', seq, job }          pack (if needed) and reply with the full RGBA bytes
 // A job is { W, H, alpha, chans: [4 × ({ id, ch, inv } | { value })] }.
 import { encodePNG, encodeTGA } from '../../core/codecs.js';
 import { resampleChannel } from '../../core/resample.js';
+import { toLinear } from '../../core/colorspace.js';
 
 const PREVIEW_MAX = 512;
 const inputs = new Map();   // id -> { w, h, data, planes: Map("WxH:c" -> Uint8ClampedArray) }
@@ -95,6 +97,8 @@ self.onmessage = async ({ data: m }) => {
       }
       case 'encode': {
         const img = pixels(compose(m.job), m.view);
+        // a single alpha channel saved as gray is a mask already: leave it
+        if (m.linear && m.view !== '3') toLinear(img.px, img.ch);
         const blob = m.format === 'png' ? await encodePNG(img) : encodeTGA(img);
         self.postMessage({ type: 'encoded', seq: m.seq, blob });
         break;

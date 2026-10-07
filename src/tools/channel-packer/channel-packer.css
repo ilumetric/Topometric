@@ -388,6 +388,15 @@
   font-size: 13px
 }
 
+.pk-space {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 0 16px;
+  color: var(--muted);
+  font-size: 13px
+}
+
 .pk-size select {
   min-width: 0;
   max-width: 100%;
