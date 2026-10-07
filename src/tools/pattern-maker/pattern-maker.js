@@ -522,6 +522,11 @@ export function mount(root, { showToast }) {
       add(toggle({ label: 'Round caps', ...bind('roundCaps') })),
     );
     else if (wood) shape.push(
+      add(segmented({
+        label: 'Style',
+        options: [['smooth', 'Smooth', 'Rings flow in soft curves'], ['broken', 'Broken', 'Rings kink into sharp angles, like hand-carved or stylized wood']],
+        ...bind('woodStyle'),
+      })),
       pair('Direction', 'woodVertical', ['Horizontal', 'Rings run left to right'], ['Vertical', 'Rings run top to bottom']),
       s('Rings', 'rings', 1, 80, 1, int),
       s('Warp', 'warp', 0, 1, .01, pct),
@@ -614,7 +619,7 @@ export function mount(root, { showToast }) {
         ...bind('blend'),
       })),
       tip(wood
-        ? 'Rings is how many growth rings cross the tile; Warp bends them, Warp scale sets how many bends fit across, Detail adds smaller wiggles. Sharpness narrows the dark latewood line. Knots push the rings into closed eyes. Use Overlay or Darken on top of Bricks to give boards a grain. Double-click a label to reset it.'
+        ? 'Style: Smooth rings flow, Broken rings kink into angles. Rings is how many growth rings cross the tile; Warp bends them, Warp scale sets how many bends fit across, Detail adds smaller wiggles. Sharpness narrows the dark latewood line. Knots push the rings into closed eyes. Use Overlay or Darken on top of Bricks to give boards a grain. Double-click a label to reset it.'
         : 'Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Angle counts counterclockwise: 90° points up. Bricks: Bond shifts each course (half: running bond); Random shift and Length vary turn bricks into boards; Jitter tilts each brick by up to 5°. Gradient: Direction sets where it starts; Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets. Double-click a label to reset it.'),
     );
     syncLayerVisibility();

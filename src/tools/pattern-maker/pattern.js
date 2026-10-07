@@ -53,7 +53,7 @@ export const TYPE_DEFAULTS = {
   circles: { gradMode: 'radial', count: 80, sizeMin: .02, sizeMax: .2, bias: -.4, stretch: 1, satellites: 0, satSize: .2, satContrast: -.3 },
   halftone: { gradMode: 'radial', count: 10, sizeMin: .12, sizeMax: .28, dotSpacing: .012, dotSize: .75, falloff: .6, rough: .5, breakup: .15, angle: 45, jitter: 0 },
   lines: { ...BRICKS, gradMode: 'along', count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
-  wood: { rings: 14, warp: .35, warpScale: 3, detail: .35, sharpness: .55, fibers: .35, knots: 2, knotSize: .05, knotStrength: .7, woodVertical: false, toneMin: .25, toneMax: .7 },
+  wood: { woodStyle: 'smooth', rings: 14, warp: .35, warpScale: 3, detail: .35, sharpness: .55, fibers: .35, knots: 2, knotSize: .05, knotStrength: .7, woodVertical: false, toneMin: .25, toneMax: .7 },
 };
 
 export function newLayer(type, over) {
@@ -138,6 +138,24 @@ function shade(ctx, L, it, g) {
   return fill;
 }
 
+// Wobble: a soft warp of the whole stroke. Each point moves by a few slow waves laid over the
+// stroke (a long sway of about half a wave along it, plus a weaker shorter one), so the
+// outline sways and swells smoothly and both edges and the streaks bend together. It has its
+// own random stream, so changing wobble never moves the strokes. Returns (x, y) => [x', y'];
+// `reach` is how far a point can move.
+function wobbleWarp(amount, len, w, seed) {
+  if (!(amount > 0)) return Object.assign((x, y) => [x, y], { reach: 0 });
+  const r = mulberry32(seed ^ 0x2C1B3C6D);
+  // `swell` tilts a wave across the width, so the two edges move a little apart and together
+  const wave = (cycles, amp, swell) => ({
+    kx: TAU * cycles / len * (r() < .5 ? -1 : 1), ky: TAU * (r() - .5) * swell / (w + 1), ph: r() * TAU, amp,
+  });
+  const side = amount * (w * .7 + len * .045), along = amount * len * .03;
+  const across = [wave(.45 + .45 * r(), side * .75, .12), wave(1.3 + .6 * r(), side * .25, .35)], lengthwise = wave(.6 + .5 * r(), along, .1);
+  const s = (q, x, y) => q.amp * Math.sin(q.kx * x + q.ky * y + q.ph);
+  return Object.assign((x, y) => [x + s(lengthwise, x, y), y + s(across[0], x, y) + s(across[1], x, y)], { reach: side + along });
+}
+
 /* ── Shapes: each draws one item in its own coordinates (centre at 0, 0, unrotated) ── */
 const SHAPES = {
   // Angular polygons: shards, chips and rectangles (4 sides, no irregularity).
@@ -156,35 +174,40 @@ const SHAPES = {
     });
   },
 
-  // Brush strokes and bars: a bent centre line with a width profile (taper, wobble, round caps).
+  // Brush strokes and bars: a bent centre line with a width profile (taper, round caps),
+  // softly warped as a whole by wobble.
   strokes(ctx, S, L, it, r) {
     const len = it.size, w = (it.wid ?? len / L.stretch) / 2, bend = L.bend * (r() * 2 - 1) * len * .35;
     // the tip (the tapered end) is at +x, so it points along the angle; 'random' turns half around
-    const p1 = r() * TAU, p2 = r() * TAU, tail = r() < .5 || L.tips !== 'random', N = 32;
+    r(); r();                                                   // (were wobble phases; kept so layouts don't change)
+    const tail = r() < .5 || L.tips !== 'random', N = L.wobble > 0 ? 48 : 32;
+    const warp = wobbleWarp(L.wobble, len, w, it.seed);
     const cx = [], cy = [], nx = [], ny = [], hw = [];
     for (let i = 0; i <= N; i++) {
       const t = (1 - Math.cos(Math.PI * i / N)) / 2;            // denser near the ends, for round caps
       const u = 2 * t - 1, dx = len, dy = -2 * bend * u, d = Math.hypot(dx, dy);
       cx.push((t - .5) * len); cy.push(bend * (1 - u * u));
       nx.push(-dy / d); ny.push(dx / d);
-      let h = w * (1 - L.taper * (tail ? t : 1 - t)) * (1 + L.wobble * .4 * (Math.sin(t * 10.7 + p1) * .6 + Math.sin(t * 19.5 + p2) * .4));
+      let h = w * (1 - L.taper * (tail ? t : 1 - t));
       const e = Math.min(t, 1 - t) * len, rc = L.round * w;
       if (rc > 0 && e < rc) h *= Math.sqrt(Math.max(0, 1 - (1 - e / rc) ** 2));
       hw.push(Math.max(0, h));
     }
+    // a point `v` of the way from the centre line to the edge (-1…1), warped
+    const at = (i, v) => warp(cx[i] + nx[i] * hw[i] * v, cy[i] + ny[i] * hw[i] * v);
     const path = new Path2D();
-    for (let i = 0; i <= N; i++) path[i ? 'lineTo' : 'moveTo'](cx[i] + nx[i] * hw[i], cy[i] + ny[i] * hw[i]);
-    for (let i = N; i >= 0; i--) path.lineTo(cx[i] - nx[i] * hw[i], cy[i] - ny[i] * hw[i]);
+    for (let i = 0; i <= N; i++) path[i ? 'lineTo' : 'moveTo'](...at(i, 1));
+    for (let i = N; i >= 0; i--) path.lineTo(...at(i, -1));
     path.closePath();
     // streaks: thin lines along the stroke, a shade lighter or darker, like bristle marks
     const streaks = [];
     for (let k = 0, m = L.streaks > 0 ? 3 + Math.floor(r() * 6) : 0; k < m; k++) {
       const v = (r() * 2 - 1) * .9, sp = new Path2D();
-      for (let i = 0; i <= N; i++) sp[i ? 'lineTo' : 'moveTo'](cx[i] + nx[i] * hw[i] * v, cy[i] + ny[i] * hw[i] * v);
+      for (let i = 0; i <= N; i++) sp[i ? 'lineTo' : 'moveTo'](...at(i, v));
       streaks.push({ path: sp, width: w * (.04 + .1 * r()), tone: gray(it.tone + (r() - .5) * .5), alpha: L.streaks * (.4 + .6 * r()) });
     }
     const fill = shade(ctx, L, it, { hx: len / 2, hy: w + Math.abs(bend) / 2, r: len / 2, rev: !tail });
-    place(ctx, S, it.x, it.y, it.a, len / 2 + Math.abs(bend) + w, () => {
+    place(ctx, S, it.x, it.y, it.a, len / 2 + Math.abs(bend) + w + warp.reach, () => {
       ctx.fillStyle = fill;
       ctx.fill(path);
       if (!streaks.length) return;
@@ -350,18 +373,21 @@ function drawLayer(ctx, S, L, seed) {
 /* ── Wood ──
    A grain field: each pixel's ring coordinate is f = v·rings + warp, where v runs across the
    grain. Across the tile f grows by exactly `rings`, and the warp is periodic noise, so the
-   rings line up at every edge. Knots push the rings aside into closed eyes. The tone follows
+   rings line up at every edge. Knots push the rings aside into closed eyes. The Broken style
+   bends the rings with ridged noise (1 − 2|n|, straight-interpolated): it folds sharply where
+   the noise crosses zero, so the rings kink into angles instead of flowing. The tone follows
    the ring profile: light earlywood darkening into a thin latewood line, plus fibers — fine
    streaks that follow the rings. */
 
 // Periodic value noise on an nx × ny lattice: f(u, v) for u, v in [0, 1), wrapping at 1.
-function tileNoise(rnd, nx, ny) {
+// `linear`: straight interpolation between lattice points, so the noise has corners.
+function tileNoise(rnd, nx, ny, linear) {
   const g = new Float32Array(nx * ny);
   for (let i = 0; i < g.length; i++) g[i] = rnd() * 2 - 1;
   return (u, v) => {
     const x = u * nx, y = v * ny, xi = Math.floor(x), yi = Math.floor(y);
     let fx = x - xi, fy = y - yi;
-    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    if (!linear) { fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); }
     const x0 = (xi % nx + nx) % nx, y0 = (yi % ny + ny) % ny, x1 = (x0 + 1) % nx, y1 = (y0 + 1) % ny;
     const a = g[y0 * nx + x0], b = g[y0 * nx + x1], c = g[y1 * nx + x0], d = g[y1 * nx + x1];
     return a + (b - a) * fx + (c - a + (a - b + d - c) * fx) * fy;
@@ -373,13 +399,15 @@ const woodCanvas = new Map();      // size -> scratch canvas the field is drawn 
 function drawWood(ctx, S, L, seed) {
   const rnd = mulberry32(seed), rings = Math.max(1, Math.round(L.rings)), ws = Math.max(1, Math.round(L.warpScale));
   // the warp varies slowly along the grain and faster across it, so the rings run long
-  const big = tileNoise(rnd, ws, ws * 3), small = tileNoise(rnd, ws * 3, ws * 9);
+  const broken = L.woodStyle === 'broken';
+  const big = tileNoise(rnd, ws, ws * 3, broken), small = tileNoise(rnd, ws * 3, ws * 9, broken);
+  const fold = broken ? n => 1 - 2 * Math.abs(n) : n => n;
   const fibers = tileNoise(rnd, 1, rings * 24);
   const A = L.warp * .25 * rings, D = L.detail * .35;
 
   // the warp is smooth: evaluate it on a coarse grid and interpolate per pixel
   const G = Math.min(S, 256), grid = new Float32Array(G * G);
-  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) grid[j * G + i] = big(i / G, j / G) + D * small(i / G, j / G);
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) grid[j * G + i] = fold(big(i / G, j / G)) + D * fold(small(i / G, j / G));
 
   // f in grain space: x along the grain, y across it
   const f = new Float32Array(S * S), k = G / S;

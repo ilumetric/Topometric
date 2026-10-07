@@ -67,6 +67,13 @@ export const PRESETS = [
     ],
   },
   {
+    name: 'Wood Broken',
+    g: { seed: 17, bg: .4 },
+    layers: [
+      ['wood', { woodStyle: 'broken', rings: 12, warp: .45, warpScale: 3, detail: .18, sharpness: .7, fibers: .3, knots: 1, knotSize: .05, toneMin: .18, toneMax: .64 }],
+    ],
+  },
+  {
     name: 'Brush',
     g: { seed: 5, bg: .4 },
     layers: [
