@@ -5,6 +5,9 @@
 //
 // Every layer has its own random stream (global seed × layer seed), and every shape gets a
 // sub-seed for its own details, so changing one shape setting doesn't reshuffle the layout.
+//
+// Strokes and lines can also be laid in courses like bricks or boards, and the Wood layer
+// is not made of shapes at all: it is a grain field computed per pixel from tileable noise.
 
 export const TYPES = {
   shards: 'Shards',
@@ -12,7 +15,12 @@ export const TYPES = {
   circles: 'Circles',
   halftone: 'Halftone',
   lines: 'Lines',
+  wood: 'Wood',
 };
+
+// Layer types that can be laid out as bricks or boards.
+export const BRICK_TYPES = ['strokes', 'lines'];
+const BRICKS = { brickRows: 8, brickCols: 4, brickGap: .008, brickOffset: .5, brickRandom: 0, brickVary: 0, brickVertical: false };
 
 // Settings every layer has.
 export const COMMON = {
@@ -35,15 +43,17 @@ export const GRAD_MODES = {
   circles: ['radial', 'spot', 'linear'],
   halftone: ['radial', 'linear'],
   lines: ['along', 'across', 'radial'],
+  wood: [],
 };
 
 // Settings of each layer type; they override COMMON where both have a value.
 export const TYPE_DEFAULTS = {
   shards: { count: 120, sizeMin: .04, sizeMax: .22, sides: 4, irregular: .6, stretch: 2.5, gradients: .15, gradAmount: .5, gradBoth: true, gradMode: 'linear' },
-  strokes: { gradMode: 'along', gradDir: 'fixed', tips: 'random', count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
+  strokes: { ...BRICKS, gradMode: 'along', gradDir: 'fixed', tips: 'random', count: 120, sizeMin: .06, sizeMax: .18, stretch: 4, bend: .3, taper: .3, round: .7, wobble: .2, streaks: 0 },
   circles: { gradMode: 'radial', count: 80, sizeMin: .02, sizeMax: .2, bias: -.4, stretch: 1, satellites: 0, satSize: .2, satContrast: -.3 },
   halftone: { gradMode: 'radial', count: 10, sizeMin: .12, sizeMax: .28, dotSpacing: .012, dotSize: .75, falloff: .6, rough: .5, breakup: .15, angle: 45, jitter: 0 },
-  lines: { gradMode: 'along', count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
+  lines: { ...BRICKS, gradMode: 'along', count: 8, sizeMin: .15, sizeMax: .35, lineMode: 'straight', lines: 8, lineGap: .012, lineFill: .45, ragged: .4, arcSpan: 80, roundCaps: false, angle: 45, jitter: .1 },
+  wood: { rings: 14, warp: .35, warpScale: 3, detail: .35, sharpness: .55, fibers: .35, knots: 2, knotSize: .05, knotStrength: .7, woodVertical: false, toneMin: .25, toneMax: .7 },
 };
 
 export function newLayer(type, over) {
@@ -148,7 +158,7 @@ const SHAPES = {
 
   // Brush strokes and bars: a bent centre line with a width profile (taper, wobble, round caps).
   strokes(ctx, S, L, it, r) {
-    const len = it.size, w = len / L.stretch / 2, bend = L.bend * (r() * 2 - 1) * len * .35;
+    const len = it.size, w = (it.wid ?? len / L.stretch) / 2, bend = L.bend * (r() * 2 - 1) * len * .35;
     // the tip (the tapered end) is at +x, so it points along the angle; 'random' turns half around
     const p1 = r() * TAU, p2 = r() * TAU, tail = r() < .5 || L.tips !== 'random', N = 32;
     const cx = [], cy = [], nx = [], ny = [], hw = [];
@@ -235,7 +245,8 @@ const SHAPES = {
 
   // A bundle of parallel lines: straight hatching or concentric arcs.
   lines(ctx, S, L, it, r) {
-    const n = Math.max(1, Math.round(L.lines)), sp = Math.max(1, L.lineGap * S), lw = Math.max(.5, sp * L.lineFill);
+    // laid as bricks, the lines share out the brick's width between them
+    const n = Math.max(1, Math.round(L.lines)), sp = Math.max(1, it.wid ? it.wid / n : L.lineGap * S), lw = Math.max(.5, sp * L.lineFill);
     const path = new Path2D();
     let rad, geo;
     if (L.lineMode === 'arc') {
@@ -269,8 +280,9 @@ const SHAPES = {
   },
 };
 
-function drawLayer(ctx, S, L, seed) {
-  const rnd = mulberry32(seed), n = Math.max(0, Math.round(L.count)), items = [];
+// Shapes scattered by the layer's count, spread and size settings.
+function scatter(L, rnd, S) {
+  const n = Math.max(0, Math.round(L.count)), items = [];
   const lo = Math.min(L.sizeMin, L.sizeMax), hi = Math.max(L.sizeMin, L.sizeMax), pw = Math.pow(4, -L.bias);
   const cols = Math.max(1, Math.round(Math.sqrt(n) * (L.spread === 'grid' ? 1 : 1.5)));
   const rows = Math.max(1, Math.ceil(n / cols));
@@ -290,12 +302,129 @@ function drawLayer(ctx, S, L, seed) {
     });
   }
   if (L.largeFirst) items.sort((a, b) => b.size - a.size);
+  return items;
+}
+
+// Bricks or boards: courses that fill the tile exactly, so the bond repeats seamlessly.
+//   brickRows    courses across the tile        brickCols    bricks per course
+//   brickGap     joint width, share of the tile brickOffset  shift of each course (0.5: half bond)
+//   brickRandom  random extra shift per course  brickVary    random brick lengths (boards)
+// The shift per course is rounded to a whole number of steps over the tile, so the last
+// course meets the first one with the same bond. Jitter tilts each brick by up to ±5°.
+function bricks(L, rnd, S) {
+  const rows = Math.max(1, Math.round(L.brickRows)), cols = Math.max(1, Math.round(L.brickCols));
+  const rowH = S / rows, gap = L.brickGap * S, step = Math.round(L.brickOffset * rows) / rows;
+  const base = L.brickVertical ? -Math.PI / 2 : 0, items = [];
+  for (let r = 0; r < rows; r++) {
+    const lens = [];
+    for (let c = 0; c < cols; c++) lens.push(Math.pow(4, (rnd() * 2 - 1) * L.brickVary));
+    const sum = lens.reduce((a, b) => a + b, 0);
+    let x = ((r * step + L.brickRandom * rnd()) % 1) * S / cols;
+    for (let c = 0; c < cols; c++) {
+      const len = lens[c] / sum * S, mid = (x + len / 2) % S, across = (r + .5) * rowH;
+      x += len;
+      items.push({
+        x: L.brickVertical ? across : mid, y: L.brickVertical ? mid : across,
+        size: Math.max(1, len - gap), wid: Math.max(1, rowH - gap),
+        a: base - (rnd() * 2 - 1) * L.jitter * 5 * Math.PI / 180,
+        tone: L.toneMin + (L.toneMax - L.toneMin) * rnd(),
+        seed: (rnd() * 4294967296) >>> 0,
+      });
+    }
+  }
+  return items;
+}
+
+function drawLayer(ctx, S, L, seed) {
   ctx.globalCompositeOperation = BLEND[L.blend] || 'source-over';
+  if (L.type === 'wood') { drawWood(ctx, S, L, seed); return; }
+  const rnd = mulberry32(seed);
+  const items = L.spread === 'bricks' && BRICK_TYPES.includes(L.type) ? bricks(L, rnd, S) : scatter(L, rnd, S);
   const draw = SHAPES[L.type];
   for (const it of items) {
     ctx.globalAlpha = L.opacity;
     draw(ctx, S, L, it, mulberry32(it.seed));
   }
+}
+
+/* ── Wood ──
+   A grain field: each pixel's ring coordinate is f = v·rings + warp, where v runs across the
+   grain. Across the tile f grows by exactly `rings`, and the warp is periodic noise, so the
+   rings line up at every edge. Knots push the rings aside into closed eyes. The tone follows
+   the ring profile: light earlywood darkening into a thin latewood line, plus fibers — fine
+   streaks that follow the rings. */
+
+// Periodic value noise on an nx × ny lattice: f(u, v) for u, v in [0, 1), wrapping at 1.
+function tileNoise(rnd, nx, ny) {
+  const g = new Float32Array(nx * ny);
+  for (let i = 0; i < g.length; i++) g[i] = rnd() * 2 - 1;
+  return (u, v) => {
+    const x = u * nx, y = v * ny, xi = Math.floor(x), yi = Math.floor(y);
+    let fx = x - xi, fy = y - yi;
+    fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
+    const x0 = (xi % nx + nx) % nx, y0 = (yi % ny + ny) % ny, x1 = (x0 + 1) % nx, y1 = (y0 + 1) % ny;
+    const a = g[y0 * nx + x0], b = g[y0 * nx + x1], c = g[y1 * nx + x0], d = g[y1 * nx + x1];
+    return a + (b - a) * fx + (c - a + (a - b + d - c) * fx) * fy;
+  };
+}
+
+const woodCanvas = new Map();      // size -> scratch canvas the field is drawn on
+
+function drawWood(ctx, S, L, seed) {
+  const rnd = mulberry32(seed), rings = Math.max(1, Math.round(L.rings)), ws = Math.max(1, Math.round(L.warpScale));
+  // the warp varies slowly along the grain and faster across it, so the rings run long
+  const big = tileNoise(rnd, ws, ws * 3), small = tileNoise(rnd, ws * 3, ws * 9);
+  const fibers = tileNoise(rnd, 1, rings * 24);
+  const A = L.warp * .25 * rings, D = L.detail * .35;
+
+  // the warp is smooth: evaluate it on a coarse grid and interpolate per pixel
+  const G = Math.min(S, 256), grid = new Float32Array(G * G);
+  for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) grid[j * G + i] = big(i / G, j / G) + D * small(i / G, j / G);
+
+  // f in grain space: x along the grain, y across it
+  const f = new Float32Array(S * S), k = G / S;
+  for (let y = 0; y < S; y++) {
+    const gy = y * k, j0 = Math.floor(gy), fy = gy - j0, r0 = j0 % G * G, r1 = (j0 + 1) % G * G, base = y / S * rings;
+    for (let x = 0; x < S; x++) {
+      const gx = x * k, i0 = Math.floor(gx), fx = gx - i0, i1 = (i0 + 1) % G;
+      const a = grid[r0 + i0], b = grid[r0 + i1], c = grid[r1 + i0], d = grid[r1 + i1];
+      f[y * S + x] = base + A * (a + (b - a) * fx + (c - a + (a - b + d - c) * fx) * fy);
+    }
+  }
+
+  // knots: a bump in f makes the rings close around it; the middle gets darker
+  const dark = new Float32Array(L.knots > 0 ? S * S : 0);
+  for (let n = 0, m = Math.round(L.knots); n < m; n++) {
+    const kx = rnd() * S, ky = rnd() * S, rk = L.knotSize * (.6 + .8 * rnd()) * S, sx = rk * 2.2;
+    const lift = (rnd() < .5 ? -1 : 1) * L.knotStrength * rk / S * rings * 4;
+    const bx = Math.ceil(sx * 3), by = Math.ceil(rk * 3);
+    for (let dy = -by; dy <= by; dy++) {
+      const y = ((Math.round(ky) + dy) % S + S) % S, qy = dy / rk;
+      for (let dx = -bx; dx <= bx; dx++) {
+        const x = ((Math.round(kx) + dx) % S + S) % S, qx = dx / sx, e = Math.exp(-(qx * qx + qy * qy));
+        if (e < .002) continue;
+        f[y * S + x] += lift * e;
+        dark[y * S + x] += L.knotStrength * e * e * e;              // a small, soft core
+      }
+    }
+  }
+
+  let c = woodCanvas.get(S);
+  if (!c) { woodCanvas.clear(); c = new OffscreenCanvas(S, S); woodCanvas.set(S, c); }
+  const wctx = c.getContext('2d'), img = wctx.createImageData(S, S), px = img.data;
+  const hi = L.toneMax * 255, span = (L.toneMin - L.toneMax) * 255, power = 1 + L.sharpness * 10, fib = L.fibers * 40;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const i = y * S + x, v = f[i], t = v - Math.floor(v);
+    let g = hi + span * Math.pow(t, power) + fib * fibers(0, v / rings);
+    if (dark.length) g += span * Math.min(1, dark[i]) * .45;
+    const o = (L.woodVertical ? x * S + y : i) * 4;
+    px[o] = px[o + 1] = px[o + 2] = g;
+    px[o + 3] = 255;
+  }
+  wctx.putImageData(img, 0, 0);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = L.opacity;
+  ctx.drawImage(c, 0, 0);
 }
 
 // Draws the pattern and returns its RGBA pixels with levels, invert and grain applied.
@@ -305,7 +434,7 @@ export function render(ctx, S, g, layers) {
   ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = gray(g.bg);
   ctx.fillRect(0, 0, S, S);
-  for (const L of layers) if (L.on && SHAPES[L.type]) drawLayer(ctx, S, L, mix(g.seed >>> 0, L.seed >>> 0));
+  for (const L of layers) if (L.on && (SHAPES[L.type] || L.type === 'wood')) drawLayer(ctx, S, L, mix(g.seed >>> 0, L.seed >>> 0));
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';

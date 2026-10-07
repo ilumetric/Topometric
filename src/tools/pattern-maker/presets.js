@@ -44,6 +44,29 @@ export const PRESETS = [
     ],
   },
   {
+    name: 'Bricks',
+    g: { seed: 4, bg: .78 },
+    layers: [
+      ['strokes', { spread: 'bricks', brickRows: 12, brickCols: 4, brickGap: .01, brickOffset: .5, bend: 0, taper: 0, round: .12, wobble: .15, tips: 'random', jitter: .2, toneMin: .25, toneMax: .55, gradients: .6, gradMode: 'across', gradDir: 'random', gradAmount: -.12 }],
+      ['shards', { count: 320, sizeMin: .004, sizeMax: .02, bias: -.5, sides: 5, irregular: .8, stretch: 1.5, gradients: 0, toneMin: .1, toneMax: .3, opacity: .55, blend: 'darken' }],
+    ],
+  },
+  {
+    name: 'Planks',
+    g: { seed: 12, bg: .08 },
+    layers: [
+      ['strokes', { spread: 'bricks', brickRows: 6, brickCols: 2, brickGap: .004, brickOffset: 0, brickRandom: 1, brickVary: .6, bend: 0, taper: 0, round: .04, wobble: .04, streaks: .25, tips: 'random', jitter: 0, toneMin: .35, toneMax: .62 }],
+      ['wood', { rings: 42, warp: .4, warpScale: 3, detail: .4, sharpness: .6, fibers: .45, knots: 3, knotSize: .03, toneMin: .2, toneMax: .75, opacity: .85, blend: 'overlay' }],
+    ],
+  },
+  {
+    name: 'Wood',
+    g: { seed: 21, bg: .4 },
+    layers: [
+      ['wood', { rings: 16, warp: .45, warpScale: 2, detail: .4, sharpness: .6, fibers: .4, knots: 2, knotSize: .06, toneMin: .2, toneMax: .66 }],
+    ],
+  },
+  {
     name: 'Brush',
     g: { seed: 5, bg: .4 },
     layers: [

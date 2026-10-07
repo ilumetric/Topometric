@@ -7,7 +7,7 @@ import { slider, segmented, toggle } from '../../core/controls.js';
 import { createViewer } from '../../core/image-viewer.js';
 import { sendTo } from '../../core/handoff.js';
 import { presetPicker, mergeKnown } from '../../core/presets.js';
-import { TYPES, COMMON, TYPE_DEFAULTS, GRAD_MODES, newLayer } from './pattern.js';
+import { TYPES, COMMON, TYPE_DEFAULTS, GRAD_MODES, BRICK_TYPES, newLayer } from './pattern.js';
 import { PRESETS, GLOBAL, fromPreset } from './presets.js';
 
 const STORE_KEY = 'topometric-pattern-maker-v1';
@@ -24,10 +24,11 @@ const GRAD_LABELS = {
 };
 const DESCRIBE = {
   shards: 'Angular polygons: shards, chips and, with 4 sides and no irregularity, rectangles.',
-  strokes: 'Brush strokes with bend, taper and round ends. With no bend, Columns and an angle of 90° they become bars.',
+  strokes: 'Brush strokes with bend, taper and round ends. With no bend, Columns and an angle of 90° they become bars; with Spread: Bricks, bricks or boards.',
   circles: 'Circles and ellipses, optionally with smaller spots inside.',
   halftone: 'Patches of halftone dots that fade out towards a rough edge.',
-  lines: 'Bundles of parallel lines: straight hatching or concentric arcs.',
+  lines: 'Bundles of parallel lines: straight hatching or concentric arcs. Laid as bricks, they fill each brick — planks with grain lines.',
+  wood: 'Wood grain over the whole tile: growth rings bent by tileable noise, with knots and fibers.',
 };
 
 const TEMPLATE = `
@@ -328,6 +329,8 @@ export function mount(root, { showToast }) {
   r.layers.append(head('Layers').el, list, sub('Add layer'), addRow);
 
   function summary(L) {
+    if (L.type === 'wood') return `${Math.round(L.rings)} rings · ${Math.round(L.knots)} knots`;
+    if (L.spread === 'bricks' && BRICK_TYPES.includes(L.type)) return `${Math.round(L.brickRows)} × ${Math.round(L.brickCols)} bricks`;
     return `${Math.round(L.count)} · ${(Math.min(L.sizeMin, L.sizeMax) * 100).toFixed(1)}–${(Math.max(L.sizeMin, L.sizeMax) * 100).toFixed(1)}%`;
   }
   function renderList() {
@@ -441,18 +444,27 @@ export function mount(root, { showToast }) {
   function buildLayer() {
     r.layer.replaceChildren();
     lctls = [];
-    arcCtl = null;
-    dirCtl = null;
+    shown = [];
     const L = cur();
     r.layer.hidden = !L;
     if (!L) return;
+    const wood = L.type === 'wood', brickable = BRICK_TYPES.includes(L.type);
     const add = c => { lctls.push(c); return c.el; };
+    // shows `node` only while `test(layer)` holds; checked again after every change
+    const when = (test, node) => { shown.push([node, test]); return node; };
+    const isBricks = q => brickable && q.spread === 'bricks';
     const bind = key => ({
       get: () => cur()[key], set: v => { cur()[key] = v; },
       def: { ...COMMON, ...TYPE_DEFAULTS[L.type] }[key],
       onInput: () => { changed(); syncLayerVisibility(); syncSummary(); }, onCommit: commit,
     });
     const s = (label, key, min, max, step, format) => add(slider({ label, min, max, step, format, ...bind(key) }));
+    // a true/false setting shown as two named buttons
+    const pair = (label, key, off, on) => add(segmented({
+      label, options: [['0', ...off], ['1', ...on]],
+      get: () => cur()[key] ? '1' : '0', set: v => { cur()[key] = v === '1'; },
+      onInput: () => { changed(); syncLayerVisibility(); }, onCommit: commit,
+    }));
 
     const reseed = button('btn btn-icon btn-ghost pm-dice', '', 'New seed for this layer', 'dice');
     reseed.addEventListener('click', () => { cur().seed = randomSeed(); changed(); commit(); });
@@ -471,7 +483,7 @@ export function mount(root, { showToast }) {
       s('Stretch', 'stretch', 1, 8, .05, num),
     );
     else if (L.type === 'strokes') shape.push(
-      s('Stretch', 'stretch', 1, 12, .05, num),
+      when(q => !isBricks(q), s('Stretch', 'stretch', 1, 12, .05, num)),
       s('Bend', 'bend', 0, 1, .01, pct),
       s('Taper', 'taper', 0, 1, .01, pct),
       s('Round ends', 'round', 0, 1, .01, pct),
@@ -500,21 +512,30 @@ export function mount(root, { showToast }) {
       add(segmented({
         label: 'Mode',
         options: [['straight', 'Straight', 'Parallel straight lines: hatching'], ['arc', 'Arcs', 'Concentric arcs']],
-        ...bind('lineMode'), onInput: () => { changed(); syncLayerVisibility(); },
+        ...bind('lineMode'),
       })),
       s('Lines', 'lines', 1, 40, 1, int),
-      s('Spacing', 'lineGap', .003, .04, .0005, v => (v * 100).toFixed(2) + '%'),
+      when(q => !isBricks(q), s('Spacing', 'lineGap', .003, .04, .0005, v => (v * 100).toFixed(2) + '%')),
       s('Thickness', 'lineFill', .05, .95, .01, pct),
       s('Ragged', 'ragged', 0, 1, .01, pct),
-      arcCtl = s('Arc span', 'arcSpan', 10, 300, 1, deg),
+      when(q => q.lineMode === 'arc', s('Arc span', 'arcSpan', 10, 300, 1, deg)),
       add(toggle({ label: 'Round caps', ...bind('roundCaps') })),
     );
+    else if (wood) shape.push(
+      pair('Direction', 'woodVertical', ['Horizontal', 'Rings run left to right'], ['Vertical', 'Rings run top to bottom']),
+      s('Rings', 'rings', 1, 80, 1, int),
+      s('Warp', 'warp', 0, 1, .01, pct),
+      s('Warp scale', 'warpScale', 1, 10, 1, int),
+      s('Detail', 'detail', 0, 1, .01, pct),
+      s('Sharpness', 'sharpness', 0, 1, .01, pct),
+      s('Fibers', 'fibers', 0, 1, .01, pct),
+      s('Knots', 'knots', 0, 12, 1, int),
+      s('Knot size', 'knotSize', .01, .15, .001, pct1),
+      s('Knot strength', 'knotStrength', 0, 1, .01, pct),
+    );
 
-    r.layer.append(
-      h.el,
-      tip(DESCRIBE[L.type]),
+    const placement = wood ? [] : [
       sub('Placement'),
-      s('Count', 'count', 0, MAX_COUNT[L.type], 1, int),
       add(segmented({
         label: 'Spread',
         options: [
@@ -522,15 +543,29 @@ export function mount(root, { showToast }) {
           ['grid', 'Grid', 'Even coverage: one shape per cell of a jittered grid'],
           ['columns', 'Cols', 'Shapes line up in columns'],
           ['rows', 'Rows', 'Shapes line up in rows'],
+          ...brickable ? [['bricks', 'Bricks', 'Courses of bricks or boards that fill the tile']] : [],
         ],
         ...bind('spread'),
       })),
-      s('Size min', 'sizeMin', .003, .5, .001, pct1),
-      s('Size max', 'sizeMax', .003, .5, .001, pct1),
-      s('Size bias', 'bias', -1, 1, .01, v => v < -.02 ? 'small' : v > .02 ? 'large' : 'even'),
-      add(toggle({ label: 'Large first', ...bind('largeFirst') })),
-      sub('Shape'),
-      ...shape,
+      when(q => !isBricks(q), s('Count', 'count', 0, MAX_COUNT[L.type], 1, int)),
+      when(q => !isBricks(q), s('Size min', 'sizeMin', .003, .5, .001, pct1)),
+      when(q => !isBricks(q), s('Size max', 'sizeMax', .003, .5, .001, pct1)),
+      when(q => !isBricks(q), s('Size bias', 'bias', -1, 1, .01, v => v < -.02 ? 'small' : v > .02 ? 'large' : 'even')),
+      when(q => !isBricks(q), add(toggle({ label: 'Large first', ...bind('largeFirst') }))),
+    ];
+    const bond = v => v < .01 ? 'stack' : Math.abs(v - .5) < .01 ? 'half' : pct(v);
+    const brickCtls = !brickable ? [] : [
+      pair('Direction', 'brickVertical', ['Horizontal', 'Courses run left to right'], ['Vertical', 'Courses run top to bottom']),
+      s('Courses', 'brickRows', 1, 64, 1, int),
+      s('Per course', 'brickCols', 1, 24, 1, int),
+      s('Joint', 'brickGap', 0, .05, .0005, v => (v * 100).toFixed(2) + '%'),
+      s('Bond', 'brickOffset', 0, 1, .01, bond),
+      s('Random shift', 'brickRandom', 0, 1, .01, pct),
+      s('Length vary', 'brickVary', 0, 1, .01, pct),
+    ].map(n => when(isBricks, n));
+    if (brickCtls.length) brickCtls.unshift(when(isBricks, sub('Bricks')));
+
+    const gradient = wood ? [] : [
       sub('Gradient'),
       add(segmented({
         label: 'Fill',
@@ -539,22 +574,36 @@ export function mount(root, { showToast }) {
         set: v => { cur().gradMode = v; },
         onInput: () => { changed(); syncLayerVisibility(); }, onCommit: commit,
       })),
-      dirCtl = add(segmented({
+      // a start and an end only exist for fills along or across a shape
+      when(q => ['along', 'across'].includes(GRAD_MODES[q.type].includes(q.gradMode) ? q.gradMode : GRAD_MODES[q.type][0]), add(segmented({
         label: 'Direction',
         options: L.type === 'strokes'
           ? [['fixed', 'Base → tip', 'Starts at the wide base and ends at the tapered tip of every stroke'], ['random', 'Random', 'Starts at a random end of each stroke']]
           : [['fixed', 'Same', 'Starts at the same end of every shape'], ['random', 'Random', 'Starts at a random end of each shape']],
         ...bind('gradDir'),
-      })),
+      }))),
       s('Shapes', 'gradients', 0, 1, .01, pct),
       s('End tone', 'gradAmount', -1, 1, .01, v => (v > 0 ? '+' : '') + Math.round(v * 100) + '%'),
       add(toggle({ label: 'Both ways', ...bind('gradBoth') })),
+    ];
+    const rotation = wood ? [] : [
       sub('Rotation'),
-      s('Angle', 'angle', 0, 360, 1, deg),
+      when(q => !isBricks(q), s('Angle', 'angle', 0, 360, 1, deg)),
       s('Jitter', 'jitter', 0, 1, .01, pct),
+    ];
+
+    r.layer.append(
+      h.el,
+      tip(DESCRIBE[L.type]),
+      ...placement,
+      ...brickCtls,
+      sub(wood ? 'Grain' : 'Shape'),
+      ...shape,
+      ...gradient,
+      ...rotation,
       sub('Tone'),
-      s('Tone min', 'toneMin', 0, 1, .01, pct),
-      s('Tone max', 'toneMax', 0, 1, .01, pct),
+      s(wood ? 'Latewood' : 'Tone min', 'toneMin', 0, 1, .01, pct),
+      s(wood ? 'Earlywood' : 'Tone max', 'toneMax', 0, 1, .01, pct),
       s('Opacity', 'opacity', 0, 1, .01, pct),
       add(segmented({
         label: 'Blend',
@@ -564,19 +613,16 @@ export function mount(root, { showToast }) {
         ],
         ...bind('blend'),
       })),
-      tip('Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Angle counts counterclockwise: 90° points up. Gradient: Direction sets where it starts; Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets; Both ways lets half of them go the other way. Double-click a label to reset it.'),
+      tip(wood
+        ? 'Rings is how many growth rings cross the tile; Warp bends them, Warp scale sets how many bends fit across, Detail adds smaller wiggles. Sharpness narrows the dark latewood line. Knots push the rings into closed eyes. Use Overlay or Darken on top of Bricks to give boards a grain. Double-click a label to reset it.'
+        : 'Sizes are a share of the texture, so the pattern looks the same at any resolution. Tone is the gray level each shape gets at random between min and max. Angle counts counterclockwise: 90° points up. Bricks: Bond shifts each course (half: running bond); Random shift and Length vary turn bricks into boards; Jitter tilts each brick by up to 5°. Gradient: Direction sets where it starts; Shapes is the share of shapes that get one; End tone is how much lighter (+) or darker (−) it gets. Double-click a label to reset it.'),
     );
     syncLayerVisibility();
   }
-  let arcCtl = null, dirCtl = null;
+  let shown = [];
   function syncLayerVisibility() {
     const L = cur();
-    if (arcCtl) arcCtl.hidden = L?.lineMode !== 'arc';
-    // a start and an end only exist for fills along or across a shape
-    if (dirCtl && L) {
-      const mode = GRAD_MODES[L.type].includes(L.gradMode) ? L.gradMode : GRAD_MODES[L.type][0];
-      dirCtl.hidden = mode !== 'along' && mode !== 'across';
-    }
+    if (L) shown.forEach(([node, test]) => { node.hidden = !test(L); });
   }
   function syncSummary() {
     const row = list.children[layers.length - 1 - sel];
